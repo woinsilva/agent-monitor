@@ -45,6 +45,13 @@ function main() {
   let input = {};
   try { input = JSON.parse(fs.readFileSync(0, 'utf8') || '{}') || {}; } catch (e) {}
 
+  // heartbeat: tells the dashboard (and you) that Claude Code runs the status line at all,
+  // which separates "not supported here" from "supported, but no plan limits sent"
+  try {
+    fs.mkdirSync(DATA_DIR, { recursive: true });
+    fs.writeFileSync(path.join(DATA_DIR, 'statusline-seen.json'), JSON.stringify({ at: Date.now(), limits: !!input.rate_limits, version: input.version || null }));
+  } catch (e) {}
+
   const rl = input.rate_limits || {};
   const limits = {
     at: Date.now(),
