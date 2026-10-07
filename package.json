@@ -1,0 +1,16 @@
+{
+  "name": "agent-monitor",
+  "version": "0.2.0",
+  "description": "Local live dashboard (and pixel-art office) for Claude Code, Codex and other AI coding agents",
+  "private": true,
+  "engines": {
+    "node": ">=18"
+  },
+  "scripts": {
+    "start": "node server.js",
+    "setup": "node setup.js",
+    "docker": "node setup.js && docker compose up -d --build",
+    "hooks": "node install.js",
+    "hooks:global": "node install.js --global"
+  }
+}

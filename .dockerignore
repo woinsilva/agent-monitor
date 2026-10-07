@@ -1,0 +1,10 @@
+data
+.env
+.git
+*.cmd
+*.sh
+install.js
+setup.js
+hook.js
+report.js
+README*.md

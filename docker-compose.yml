@@ -1,0 +1,33 @@
+# Agent Monitor dashboard in Docker. Run `node setup.js` first: it writes .env
+# with this machine's time zone and the Claude Code / Codex session folders.
+#
+#   node setup.js
+#   docker compose up -d --build     (first time / after changing server.js or public/)
+#   docker compose down              (stop for good)
+#
+# "restart: unless-stopped" brings it back whenever Docker starts, so it comes
+# up with the computer if Docker is set to start at login. The hooks (hook.js)
+# keep running on the host and write to ./data.
+services:
+  agent-monitor:
+    build: .
+    container_name: agent-monitor
+    restart: unless-stopped
+    ports:
+      - "127.0.0.1:4400:4400"     # only reachable from this machine
+    environment:
+      TZ: ${AM_TZ:-UTC}           # event files are named by local date
+      AGENT_MONITOR_DATA: /data
+      CODEX_SESSIONS: /host/codex-sessions
+      HOST_LABEL: ${AM_HOST_LABEL:-agent-monitor}
+      PATH_MAP: ${AM_PATH_MAP:-}
+    volumes:
+      - ./data:/data
+      - type: bind
+        source: ${AM_CLAUDE_DIR:?run "node setup.js" first}
+        target: /host/claude-projects
+        read_only: true
+      - type: bind
+        source: ${AM_CODEX_DIR:?run "node setup.js" first}
+        target: /host/codex-sessions
+        read_only: true
