@@ -169,7 +169,7 @@
   @keyframes dash { to { stroke-dashoffset: -10; } }
   .oa { position: absolute; width: 4.2%; transform: translateX(-50%); pointer-events: auto; cursor: pointer; }
   .oa.intern { width: 3%; }
-  .ob { position: absolute; bottom: calc(100% + 6px); left: 50%; transform: translateX(-50%); max-width: 230px; width: max-content; padding: 4px 8px; border-radius: 8px; background: #ffffff; color: #1b1f24; font-size: 11.5px; line-height: 1.3; box-shadow: 0 2px 6px rgba(0,0,0,.18); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; pointer-events: none; border: 1px solid rgba(0,0,0,.08); }
+  .ob { position: absolute; bottom: calc(100% + 6px); left: 50%; transform: translateX(-50%); max-width: 190px; width: max-content; padding: 4px 8px; border-radius: 8px; background: #ffffff; color: #1b1f24; font-size: 11.5px; line-height: 1.3; box-shadow: 0 2px 6px rgba(0,0,0,.18); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; pointer-events: none; border: 1px solid rgba(0,0,0,.08); }
   .ob::after { content: ""; position: absolute; left: 50%; top: 100%; transform: translateX(-50%); border: 5px solid transparent; border-top-color: #ffffff; }
   .ob.none { display: none; }
   .ob.work { font-family: var(--mono); font-size: 11px; }
@@ -183,6 +183,8 @@
   .ob.fail { background: #fde2df; color: #9b2a20; } .ob.fail::after { border-top-color: #fde2df; }
   .ob.bye { color: #687280; }
   @keyframes bob { 50% { transform: translate(-50%, -3px); } }
+  .oa.alt .ob { bottom: calc(100% + 30px); }
+  .oa.alt .ob::after { border-width: 14px 4px 0; }
   .oa.edge-l .ob { left: -6px; transform: none; animation: none; } .oa.edge-l .ob::after { left: 14px; }
   .oa.edge-r .ob { left: auto; right: -6px; transform: none; animation: none; } .oa.edge-r .ob::after { left: auto; right: 8px; transform: none; }
   .otag { position: absolute; top: calc(100% + 2px); left: 50%; transform: translateX(-50%); font-size: 10.5px; white-space: nowrap; color: #3b3125; background: rgba(255,255,255,.75); padding: 0 5px; border-radius: 4px; pointer-events: none; }

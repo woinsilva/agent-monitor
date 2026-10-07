@@ -8,6 +8,7 @@
   },
   "scripts": {
     "start": "node server.js",
+    "demo": "node demo.js",
     "setup": "node setup.js",
     "docker": "node setup.js && docker compose up -d --build",
     "hooks": "node install.js",

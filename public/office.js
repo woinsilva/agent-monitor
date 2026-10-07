@@ -629,6 +629,8 @@
       el.style.top = pct(head, H);
       el.style.height = pct(a.y - head, H);
       el.style.zIndex = String(Math.round(a.y));
+      // neighbours' bubbles would overlap at the same height: lift every other desk's
+      el.classList.toggle('alt', a.type === 'main' && a.slot % 2 === 1);
       el.classList.toggle('edge-l', a.x < 60);
       el.classList.toggle('edge-r', a.x > W - 60);
     }

@@ -1,84 +1,133 @@
-# Agent Monitor
+<h1 align="center">Agent Monitor</h1>
 
-A live, local dashboard for AI coding agents. See at a glance how many agents
-are working, what each one is doing right now, who is waiting for your approval,
-which files they touched, and when two of them edit the same file.
+<p align="center">
+  <b>See what your AI coding agents are doing, live, as a pixel-art office.</b><br>
+  Claude Code · Codex · any other agent · runs 100% on your machine
+</p>
 
-Works with **Claude Code** and **Codex** out of the box (through their hooks),
-and with **any other agent or script** through a one-line reporter. Everything
-runs on your machine at http://localhost:4400; nothing is sent anywhere.
+<p align="center">
+  <a href="#quick-start">Quick start</a> ·
+  <a href="#try-the-demo">Demo</a> ·
+  <a href="#how-it-works">How it works</a> ·
+  <a href="#other-agents">Other agents</a> ·
+  <a href="README.pt-BR.md">Português</a>
+</p>
 
-*[Português](README.pt-BR.md)*
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="docs/office-dark.png">
+  <img alt="The office view: Claude Code and Codex agents at their desks, one waiting for approval, a red line linking two agents that edited the same file" src="docs/office-light.png">
+</picture>
 
-## Views
+When you run several agents at once (a couple of Claude Code sessions, Codex in
+another window, subagents fanning out) it gets hard to tell who is doing what,
+who is stuck waiting for you, and whether two of them are editing the same file.
+Agent Monitor answers that at a glance.
 
-- **Office:** a pixel-art office where every session is an employee. Claude Code
-  on the left, Codex on the right, other agents in the meeting room, subagents as
-  interns behind the chair of whoever started them.
-  - typing: editing files or running a command (the monitor shows which)
-  - reading a sheet: reading or searching code
-  - standing with a raised hand and a yellow bubble: **waiting for you**
-  - holding a coffee: idle
-  - head on the desk: no signal for 20+ minutes
-  
-  Agents walk in through the door when they start and leave when they end. A red
-  line links two agents that edited the same file. Click anyone for their history.
-- **Panel:** one card per session with the current action, counters, context use
-  and subagents, plus filters.
-- **Timeline:** today's activity per session and how many agents ran at once.
-- **Notifications:** desktop notifications (with a chime) when an agent starts
-  waiting for you, optionally also when one finishes. The tab title shows how many
-  are waiting. They work while the tab is open, even in the background.
+## Features
 
-English and Portuguese, following the browser (switch with the EN/PT button).
+- **Office view.** Every session is an employee at a desk: Claude Code on the left,
+  Codex on the right, other agents in the meeting room, subagents as interns behind
+  the chair of whoever started them. What they do mirrors what the agent does:
 
-## Requirements
+  | On screen | Means |
+  |---|---|
+  | typing, monitor shows a terminal or code | running a command / editing files |
+  | reading a sheet | reading or searching code |
+  | standing, hand raised, yellow bubble | **waiting for your approval or answer** |
+  | holding a coffee | idle, turn finished |
+  | head on the desk, `zZz` | no signal for 20+ minutes |
 
-- Node.js 18+ (the hooks run on your machine)
-- Optional: Docker, to keep the dashboard running and starting with the computer
+  Agents walk in through the door when they start and leave when the session ends.
+- **Same-file alert.** A red dashed line links two agents that edited the same file
+  in the last hour, even across Claude Code and Codex.
+- **Panel view.** One card per session with the prompt, the current action and for
+  how long, tool calls, failures, files edited, context-window use and subagents.
+- **History.** Click anyone to see their full timeline: prompts, commands, edits,
+  permission requests, subagents, replies.
+- **Today's timeline** with how many agents ran at the same time.
+- **Desktop notifications** with a chime when an agent starts waiting for you
+  (optionally also when one finishes), and a tab title like `(2) Waiting for you`.
+- **Token use** read from the agents' own session files, plus Codex's weekly limit.
+- **Zero tokens, zero dependencies.** The hooks print nothing, so nothing enters
+  the model's context. Plain Node.js, no `npm install`.
+- English and Portuguese, following your browser.
+
+<details>
+<summary><b>Panel view</b></summary>
+<br>
+<img alt="The panel view: one card per agent with its current action, counters and subagents" src="docs/panel-dark.png">
+</details>
+
+## Try the demo
+
+No agents or setup needed: this fills a throwaway folder with fictional agents and
+keeps them busy.
+
+```sh
+git clone https://github.com/woinsilva/agent-monitor.git
+cd agent-monitor
+node demo.js
+```
+
+Open http://localhost:4401.
 
 ## Quick start
 
+Requires **Node.js 18+**. Docker is optional.
+
 ```sh
-git clone https://github.com/<you>/agent-monitor.git
+git clone https://github.com/woinsilva/agent-monitor.git
 cd agent-monitor
 
-# 1. hooks: per project, or --global for every project of your user
+# 1. install the hooks: for one project...
 node install.js /path/to/your/project
-# node install.js --global
+#    ...or for every project of your user
+node install.js --global
 
-# 2a. run it with Node
+# 2. start the dashboard
 node server.js
+```
 
-# 2b. or run it in Docker (comes back whenever Docker starts)
-node setup.js
+Open http://localhost:4400 and send a prompt to Claude Code or Codex. The first time,
+Codex asks you to trust the new hooks: accept them. Sessions that were already open
+may need a restart to pick the hooks up.
+
+### Keep it running with Docker
+
+```sh
+node setup.js                    # detects your time zone and the agents' folders, writes .env
 docker compose up -d --build
 ```
 
-Open http://localhost:4400 and send a prompt to Claude Code or Codex in that project.
-Codex asks you to trust the new hooks the first time; accept them.
-
-`start.cmd` / `start.sh` start the container and open the browser; `stop.cmd` /
-`stop.sh` stop it (it stays stopped until you start it again). After changing
+The container restarts whenever Docker starts, so if Docker starts with your
+computer, so does the dashboard. `start.cmd` / `start.sh` bring it up and open the
+browser; `stop.cmd` / `stop.sh` stop it until you start it again. After changing
 `server.js` or `public/`, run `docker compose up -d --build` again.
 
 ## How it works
 
 ```
-Claude Code / Codex --hook--> hook.js   --\
-any other agent ------------> report.js ----> data/events-YYYY-MM-DD.jsonl --> server.js --> browser
+Claude Code / Codex --hooks--> hook.js   --\
+any other agent -------------> report.js ---> data/events-YYYY-MM-DD.jsonl --> server.js --> browser
                                               token use: read from the agents' own session files
 ```
 
-- `hook.js` runs on every hook event (prompt, tool use, permission request, end of
-  turn, subagents...). It appends one short line and **prints nothing**, so it never
-  enters the model's context and **costs no tokens**. About 60 ms per event.
-- Only metadata is stored: tool name, the command or file path, and the first
-  300 characters of each prompt. File contents and command output are never stored.
-- `server.js` rebuilds each session's state from those lines and streams it to the
-  page. Context use is read from Claude Code's transcripts (`~/.claude/projects`)
-  and Codex's rollouts (`~/.codex/sessions`), which also carry Codex's weekly limit.
-- Event files older than 14 days are deleted automatically.
+- **`hook.js`** runs on every hook event (prompt, tool use, permission request, end of
+  turn, subagent start/stop, session end). It appends one short JSON line and prints
+  nothing. About 60 ms per event, and it always exits 0, so a monitoring problem can
+  never block an agent.
+- **`server.js`** follows those files, rebuilds every session's state and streams it to
+  the page (Server-Sent Events). Context use comes from Claude Code's transcripts
+  (`~/.claude/projects`) and Codex's rollouts (`~/.codex/sessions`).
+- **`public/`** is plain HTML and JavaScript. The office is drawn in code on a canvas,
+  with no image files.
+
+### Privacy
+
+Everything stays on your machine. The server only listens on `127.0.0.1`, and only
+metadata is recorded: tool names, the command or file path, and the first 300
+characters of each prompt. File contents and command output are never stored. Event
+files older than 14 days are deleted automatically. All of it lives in `data/`.
 
 ## Installing the hooks
 
@@ -93,14 +142,15 @@ node install.js <project-dir> --remove   # remove only Agent Monitor's hooks
 | project | `<project>/.claude/settings.local.json` | `<project>/.codex/hooks.json` |
 | global | `~/.claude/settings.json` | `~/.codex/hooks.json` (experimental) |
 
-Existing hooks are kept, and each file is backed up as `*.bak-agent-monitor` before
-its first change. Pick either per-project or global for a given project, not both,
-or every event arrives twice.
+Hooks you already have are kept, and each file is backed up as
+`*.bak-agent-monitor` before its first change. Use either per-project or global for
+a given project, not both, or every event arrives twice.
 
 ## Other agents
 
-Anything without hooks (a script calling another model's API, a CI job, your own
-agent) can report itself; it appears in the office's meeting room:
+Anything without hooks (a script calling another model's API, a review bot, a CI
+job, your own agent) can report itself with `report.js` and shows up in the office's
+meeting room:
 
 ```sh
 node report.js start --client reviewer --prompt "Independent review of the diff" --model some-model
@@ -110,20 +160,29 @@ node report.js end   --client reviewer
 ```
 
 Calls from the same script run share a session automatically (or pass `--session`).
-`wait` marks it as waiting for you, `stop --failed` records a failure. See the
-header of `report.js` for every option.
+`wait` marks the agent as waiting for you and `stop --failed` records a failure. The
+header of `report.js` lists every option.
 
-You can also append the line yourself from any language; one JSON object per line
-in `data/events-YYYY-MM-DD.jsonl` (local date):
+<details>
+<summary>Writing the events yourself, from any language</summary>
+<br>
+
+Append one JSON object per line to `data/events-YYYY-MM-DD.jsonl` (local date):
 
 ```json
 {"ts": 1767225600000, "client": "reviewer", "event": "UserPromptSubmit", "session": "run-42", "cwd": "/path/to/project", "prompt": "Reviewing the diff"}
 {"ts": 1767225660000, "client": "reviewer", "event": "Stop", "session": "run-42", "cwd": "/path/to/project", "reply": "3 findings", "usage": {"input_tokens": 41000, "output_tokens": 2300}}
 ```
 
-Events: `UserPromptSubmit` (started), `PostToolUse` (an action, with `tool`, `kind`,
-`summary`, `files`), `PermissionRequest` (waiting for you), `Stop` (finished, with
-`reply`, `failed`, `usage`), `SessionEnd`.
+| `event` | Meaning | Useful fields |
+|---|---|---|
+| `UserPromptSubmit` | started working | `prompt`, `model` |
+| `PostToolUse` | did something | `tool`, `kind` (`command`, `edit`, `read`, `search`, `web`), `summary`, `files` |
+| `PermissionRequest` | waiting for you | `summary` |
+| `Stop` | finished | `reply`, `failed`, `usage` |
+| `SessionEnd` | left | |
+
+</details>
 
 ## Statuses
 
@@ -131,9 +190,29 @@ Events: `UserPromptSubmit` (started), `PostToolUse` (an action, with `tool`, `ki
 |---|---|
 | Working | between the prompt and the end of the turn |
 | Waiting for you | asked for permission or for your answer |
-| No signal | marked as working but silent for 20+ min (killed, hung) |
-| Idle | turn finished; listed for 3 h, then only with "show idle and ended" |
+| No signal | marked as working but silent for 20+ minutes (killed or hung) |
+| Idle | turn finished; listed for 3 hours, then only with "show idle and ended" |
 | Ended / Done | session closed / subagent finished |
 
-`data/payload-shapes.json` keeps one example of the fields each tool sends per
-event, which helps adapt the parser when Claude Code or Codex change their format.
+## Troubleshooting
+
+- **Nothing shows up.** Check that `data/` gets a new line when you send a prompt.
+  If not, the hooks are not installed where the agent runs: re-run `install.js` for
+  that folder and restart the agent session. In Codex, make sure you trusted the hooks.
+- **Some fields look empty.** Agents change their hook payloads over time.
+  `data/payload-shapes.json` keeps one real example per agent and event, which shows
+  what to adapt in `hook.js`.
+- **Docker shows no token use.** Re-run `node setup.js` and `docker compose up -d --build`
+  so the container mounts the right session folders.
+
+## Project layout
+
+| File | Role |
+|---|---|
+| `hook.js` | hook handler called by Claude Code and Codex |
+| `install.js` | adds/removes the hooks |
+| `report.js` | reporter for any other agent |
+| `server.js` | state, token reading, HTTP + live stream |
+| `public/` | the page: `index.html`, `office.js` (pixel-art office), `i18n.js` (strings) |
+| `demo.js` | demo mode with fictional agents |
+| `setup.js`, `docker-compose.yml`, `Dockerfile` | Docker setup |
