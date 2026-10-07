@@ -71,6 +71,28 @@ const CONFLICT_WINDOW_MS = 60 * 60 * 1000;
 const sessions = new Map();   // key -> session
 const codexLimits = { usedPercent: null, windowMinutes: null, resetsAt: null, at: 0 };
 
+// Claude plan usage, written by statusline.js (Claude Code only exposes it to the status line)
+let claudeLimits = null, claudeLimitsStamp = '';
+function readClaudeLimits() {
+  const file = path.join(DATA_DIR, 'claude-limits.json');
+  let st;
+  try { st = fs.statSync(file); } catch (e) { return false; }
+  const stamp = st.size + ':' + st.mtimeMs;
+  if (stamp === claudeLimitsStamp) return false;
+  claudeLimitsStamp = stamp;
+  try { claudeLimits = JSON.parse(fs.readFileSync(file, 'utf8')); return true; } catch (e) { return false; }
+}
+// a window whose reset time has passed is no longer meaningful
+function liveClaudeLimits(now) {
+  if (!claudeLimits) return null;
+  const out = { at: claudeLimits.at };
+  for (const k of ['fiveHour', 'sevenDay', 'spend']) {
+    const w = claudeLimits[k];
+    if (w && (!w.resetsAt || w.resetsAt > now)) out[k] = w;
+  }
+  return out.fiveHour || out.sevenDay || out.spend ? out : null;
+}
+
 function localDay(d) {
   const pad = x => String(x).padStart(2, '0');
   return d.getFullYear() + '-' + pad(d.getMonth() + 1) + '-' + pad(d.getDate());
@@ -496,6 +518,7 @@ function snapshot() {
     sessions: [...sessions.values()].map(s => serialize(s, now)),
     conflicts: conflicts(now),
     codexLimits: codexLimits.usedPercent == null ? null : codexLimits,
+    claudeLimits: liveClaudeLimits(now),
     settings: { longRunningMinutes: cfg.longRunningMinutes, idleToBreakRoomMinutes: cfg.idleToBreakRoomMinutes },
     phone: notifier.channels(cfg),
   };
@@ -526,6 +549,7 @@ function checkNotifications() {
   if (!ch.ntfy && !ch.telegram) return;
   const on = cfg.notify.events || {};
   const now = Date.now();
+  if (on.limit) checkLimits(cfg, now);
   for (const s of sessions.values()) {
     const st = effectiveStatus(s, now);
     if (on.waiting && st === 'waiting' && s.statusSince > startedAt && now - s.statusSince >= (cfg.notify.waitingDelaySeconds || 0) * 1000) {
@@ -542,6 +566,34 @@ function checkNotifications() {
     if (on.stale && st === 'stale' && s.lastSeen > startedAt - STALE_MS) {
       once('stale', s, s.lastSeen, { min: Math.round((now - s.lastSeen) / 60000), detail: s.prompt });
     }
+  }
+}
+
+// limit alerts already sent, kept on disk so a restart does not repeat them
+let limitAlertsCache = null;
+function limitAlerts() {
+  if (!limitAlertsCache) { try { limitAlertsCache = JSON.parse(fs.readFileSync(path.join(DATA_DIR, 'limit-alerts.json'), 'utf8')); } catch (e) { limitAlertsCache = {}; } }
+  return limitAlertsCache;
+}
+
+// once per limit window: the first time it passes notify.limitPercent
+function checkLimits(cfg, now) {
+  const threshold = cfg.notify.limitPercent || 80;
+  const when = ts => (ts ? new Date(ts).toLocaleString(cfg.language === 'pt' ? 'pt-BR' : 'en-US', { weekday: 'short', hour: '2-digit', minute: '2-digit' }) : '?');
+  const windows = [];
+  const cl = liveClaudeLimits(now);
+  if (cl && cl.fiveHour) windows.push(['Claude 5h', cl.fiveHour]);
+  if (cl && cl.sevenDay) windows.push(['Claude 7d', cl.sevenDay]);
+  if (codexLimits.usedPercent != null) windows.push(['Codex', { usedPercent: codexLimits.usedPercent, resetsAt: codexLimits.resetsAt }]);
+  for (const [who, w] of windows) {
+    if (w.usedPercent < threshold) continue;
+    const k = 'limit:' + who;
+    const moment = w.resetsAt || 0;
+    const done = limitAlerts();
+    if (done[k] === moment) continue;
+    done[k] = moment;
+    try { fs.writeFileSync(path.join(DATA_DIR, 'limit-alerts.json'), JSON.stringify(done)); } catch (e) {}
+    notifier.send('limit', { who, pct: Math.round(w.usedPercent), when: when(w.resetsAt) }).catch(() => {});
   }
 }
 
@@ -610,7 +662,7 @@ const server = http.createServer((req, res) => {
 // ---------------------------------------------------------------- main
 
 function tick() {
-  let changed = 0;
+  let changed = readClaudeLimits() ? 1 : 0;
   for (const f of eventFilesForDays(2)) changed += readEventsFile(f);
   if (changed) {
     for (const s of sessions.values()) if (Date.now() - s.lastSeen < 5000) { try { updateTokens(s); } catch (e) {} }

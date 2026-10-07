@@ -49,6 +49,7 @@
       s_working: 'agents working now', s_waiting: 'waiting for you', s_stale: 'no signal (> 20 min)',
       s_sessions_today: 'sessions today', s_tool_actions: 'tool actions today',
       s_codex_limit: 'Codex weekly limit', renews: 'resets {d}',
+      s_claude_5h: 'Claude 5-hour limit', s_claude_7d: 'Claude weekly limit', s_claude_spend: 'Claude spend limit',
 
       a_waiting: 'Waiting for you', a_same_file: 'Same file', edited_by: '{file} edited by {who}', and: ' and ', ago: '{x} ago',
       empty_none: 'No active agents right now.', empty_hint_old: ' Tick "show idle and ended" to see earlier ones.',
@@ -116,6 +117,7 @@
       s_working: 'agentes trabalhando agora', s_waiting: 'esperando você', s_stale: 'sem sinal (> 20 min)',
       s_sessions_today: 'sessões hoje', s_tool_actions: 'ações de ferramentas hoje',
       s_codex_limit: 'limite semanal do Codex', renews: 'renova {d}',
+      s_claude_5h: 'limite de 5 horas do Claude', s_claude_7d: 'limite semanal do Claude', s_claude_spend: 'limite de gasto do Claude',
 
       a_waiting: 'Esperando você', a_same_file: 'Mesmo arquivo', edited_by: '{file}: editado por {who}', and: ' e ', ago: 'há {x}',
       empty_none: 'Nenhum agente ativo agora.', empty_hint_old: ' Marque "mostrar ociosas e encerradas" para ver as anteriores.',

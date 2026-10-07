@@ -127,6 +127,19 @@ comando só vai junto se você ligar `notify.details`.
 `chatId`. As opções de cada aviso e os preços para o custo estimado estão no
 [README em inglês](README.md#phone-notifications).
 
+## Limites do plano do Claude
+
+O Claude Code só informa o uso do plano (janelas de 5 horas e semanal, planos Pro e
+Max) para a barra de status. Para levar isso ao painel:
+
+```sh
+node install.js --statusline
+```
+
+Ela também mostra `5h 23% · semana 41% · contexto 38%` no rodapé do Claude Code, roda
+localmente e não gasta tokens. O aviso no celular chega uma vez por janela quando o uso
+passa de 80%.
+
 ## Outros agentes
 
 Qualquer coisa sem hooks (um script que chama a API de outro modelo, um bot de

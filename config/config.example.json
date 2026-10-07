@@ -6,8 +6,9 @@
   "notify": {
     "ntfy": { "server": "https://ntfy.sh", "topic": "", "token": "" },
     "telegram": { "botToken": "", "chatId": "" },
-    "events": { "waiting": true, "finished": false, "longRunning": true, "stale": false },
+    "events": { "waiting": true, "finished": false, "longRunning": true, "stale": false, "limit": true },
     "waitingDelaySeconds": 30,
+    "limitPercent": 80,
     "details": false
   },
 

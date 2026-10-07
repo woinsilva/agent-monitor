@@ -68,7 +68,9 @@ Agent Monitor answers that at a glance.
   waits for you, runs long, goes silent or finishes, so you can step away from the desk.
 - **Desktop notifications** with a chime when an agent starts waiting for you
   (optionally also when one finishes), and a tab title like `(2) Waiting for you`.
-- **Token use** read from the agents' own session files, plus Codex's weekly limit.
+- **Plan limits:** Claude's 5-hour and weekly usage (through Claude Code's status line,
+  see below) and Codex's weekly limit, with a phone alert when one passes 80%.
+- **Token use** read from the agents' own session files.
 - **Zero tokens, zero dependencies.** The hooks print nothing, so nothing enters
   the model's context. Plain Node.js, no `npm install`.
 - English and Portuguese, following your browser.
@@ -186,9 +188,27 @@ take your chat id from `https://api.telegram.org/bot<token>/getUpdates`, and set
 | `notify.events.longRunning` | `true` | a prompt passed `longRunningMinutes` (30) |
 | `notify.events.stale` | `false` | a working agent went silent for 20+ minutes |
 | `notify.events.finished` | `false` | an agent finished its turn |
+| `notify.events.limit` | `true` | a Claude or Codex plan limit passed `notify.limitPercent` (80) |
 | `notify.waitingDelaySeconds` | `30` | only alert if it is still waiting after this, so quick approvals at the desk don't buzz your phone |
 | `notify.details` | `false` | add the command or prompt to the message (off by default: messages leave your machine) |
 | `language` | `en` | `en` or `pt` |
+
+### Claude plan limits
+
+Claude Code shares the plan usage (5-hour and weekly windows, Pro and Max plans) only
+with its [status line](https://code.claude.com/docs/en/statusline). To get it on the
+dashboard, install Agent Monitor's status line:
+
+```sh
+node install.js --statusline          # writes statusLine to ~/.claude/settings.json
+node install.js --statusline --remove
+```
+
+It also shows `5h 23% · week 41% · ctx 38%` in Claude Code's footer. It runs locally and
+costs no tokens. It will not replace a status line you already have; in that case,
+pipe your script's input to `statusline.js` too. Numbers show up after the first reply
+of a new session. The phone alert fires once per window when usage passes
+`notify.limitPercent` (80).
 
 ### Cost estimate
 
@@ -287,6 +307,7 @@ Append one JSON object per line to `data/events-YYYY-MM-DD.jsonl` (local date):
 | File | Role |
 |---|---|
 | `hook.js` | hook handler called by Claude Code and Codex |
+| `statusline.js` | Claude Code status line that records the plan limits |
 | `install.js` | adds/removes the hooks |
 | `report.js` | reporter for any other agent |
 | `server.js` | state, token reading, HTTP + live stream |

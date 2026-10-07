@@ -447,12 +447,16 @@
     const breakdown = [...new Set(today.map(s => s.client))].map(c => today.filter(s => s.client === c).length + ' ' + clientName(c)).join(' · ');
     const todayTools = scoped.filter(s => s.lastSeen >= midnight.getTime()).reduce((a, s) => a + s.toolCount, 0);
     const lim = state.codexLimits;
+    const cl = state.claudeLimits || {};
+    const resets = ts => (ts ? ' · ' + esc(t('renews', { d: new Date(ts).toLocaleString(I18N.locale, ts - now() < 86400000 ? { hour: '2-digit', minute: '2-digit' } : { weekday: 'short', day: '2-digit' }) })) : '');
+    const limitTile = (w, label) => w ? `<div class="stat"><div class="n" style="${w.usedPercent >= 80 ? 'color:var(--stale)' : ''}">${Math.round(w.usedPercent)}%</div><div class="l">${esc(label)}${resets(w.resetsAt)}</div><div class="meter"><i style="width:${Math.min(100, w.usedPercent)}%;background:var(--c-claude)"></i></div></div>` : '';
     $('stats').innerHTML = `
       <div class="stat working"><div class="n">${nWorking}</div><div class="l">${esc(t('s_working'))}</div></div>
       <div class="stat waiting"><div class="n">${nWaiting}</div><div class="l">${esc(t('s_waiting'))}</div></div>
       ${nStale ? `<div class="stat"><div class="n" style="color:var(--stale)">${nStale}</div><div class="l">${esc(t('s_stale'))}</div></div>` : ''}
       <div class="stat"><div class="n">${today.length}</div><div class="l">${esc(t('s_sessions_today'))}${breakdown ? ' (' + esc(breakdown) + ')' : ''}</div></div>
       <div class="stat"><div class="n">${todayTools}</div><div class="l">${esc(t('s_tool_actions'))}</div></div>
+      ${limitTile(cl.fiveHour, t('s_claude_5h'))}${limitTile(cl.sevenDay, t('s_claude_7d'))}${limitTile(cl.spend, t('s_claude_spend'))}
       ${lim ? `<div class="stat"><div class="n">${Math.round(lim.usedPercent)}%</div><div class="l">${esc(t('s_codex_limit'))}${lim.resetsAt ? ' · ' + esc(t('renews', { d: new Date(lim.resetsAt).toLocaleDateString(I18N.locale, { weekday: 'short', day: '2-digit' }) })) : ''}</div><div class="meter"><i style="width:${Math.min(100, lim.usedPercent)}%"></i></div></div>` : ''}`;
 
     // alerts
