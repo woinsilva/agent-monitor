@@ -1,4 +1,8 @@
 data
+config
+test
+docs
+.github
 .env
 .git
 *.cmd
@@ -7,4 +11,5 @@ install.js
 setup.js
 hook.js
 report.js
+demo.js
 README*.md

@@ -23,6 +23,7 @@ services:
       PATH_MAP: ${AM_PATH_MAP:-}
     volumes:
       - ./data:/data
+      - ./config:/config:ro      # config/config.json: phone notifications, prices...
       - type: bind
         source: ${AM_CLAUDE_DIR:?run "node setup.js" first}
         target: /host/claude-projects

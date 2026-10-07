@@ -9,6 +9,22 @@
 
   const DICT = {
     en: {
+      view_report: 'Report',
+      this_prompt: 'on this prompt for {t}', long_running: 'long-running', a_long: 'Running long',
+      a_long_item: '{who}: {t} on the same prompt',
+      tests_pass: 'tests passed', tests_fail: 'tests failed', tests_running: 'running tests', tests_unknown: 'tests ran',
+      git_dirty: v => v.n + ' uncommitted', phone_on: '📱 phone: {ch}', phone_off: '📱 phone alerts off',
+      phone_hint: 'Set up ntfy or Telegram in config/config.json to get alerts on your phone.',
+      o_done: '✓ done!',
+      r_days: v => v.n === 1 ? 'Today' : v.n + ' days',
+      r_hours: 'agent-hours', r_waiting: 'waiting for you', r_waiting_share: '{p}% of the time', r_prompts: 'prompts',
+      r_tools: 'tool calls', r_fail_rate: '{p}% failed', r_tests: 'test runs', r_tests_detail: '{pass} passed · {fail} failed',
+      r_tokens: 'tokens', r_cost: 'estimated cost', r_cost_none: 'set prices in config to estimate cost', r_cost_partial: 'part of the tokens has no price',
+      r_by_day: 'Agent-hours per day', r_waiting_day: 'Time waiting for you per day', r_projects: 'Projects',
+      r_files: 'Most edited files', r_failing: 'Commands that failed most', r_models: 'Tokens by model',
+      r_project: 'Project', r_sessions: 'Sessions', r_edits: 'edits', r_times: 'times', r_none: 'Nothing recorded in this period.',
+      r_loading: 'Loading report…', r_model: 'Model', r_input: 'Input', r_output: 'Output', r_cache: 'Cache read',
+      other: 'Other',
       connecting: 'connecting…', live: 'live', disconnected: 'server disconnected, reconnecting…',
       view_office: 'Office', view_panel: 'Panel', all: 'All', all_projects: 'All projects',
       show_old: 'show idle and ended', lang: 'PT',
@@ -60,6 +76,22 @@
     },
 
     pt: {
+      view_report: 'Relatório',
+      this_prompt: 'neste pedido há {t}', long_running: 'demorando', a_long: 'Demorando',
+      a_long_item: '{who}: {t} no mesmo pedido',
+      tests_pass: 'testes passaram', tests_fail: 'testes falharam', tests_running: 'rodando testes', tests_unknown: 'testes rodaram',
+      git_dirty: v => v.n + ' sem commit', phone_on: '📱 celular: {ch}', phone_off: '📱 avisos no celular desligados',
+      phone_hint: 'Configure o ntfy ou o Telegram em config/config.json para receber avisos no celular.',
+      o_done: '✓ pronto!',
+      r_days: v => v.n === 1 ? 'Hoje' : v.n + ' dias',
+      r_hours: 'horas de agente', r_waiting: 'esperando você', r_waiting_share: '{p}% do tempo', r_prompts: 'pedidos',
+      r_tools: 'ações de ferramentas', r_fail_rate: '{p}% falharam', r_tests: 'execuções de teste', r_tests_detail: '{pass} passaram · {fail} falharam',
+      r_tokens: 'tokens', r_cost: 'custo estimado', r_cost_none: 'configure os preços para estimar o custo', r_cost_partial: 'parte dos tokens está sem preço',
+      r_by_day: 'Horas de agente por dia', r_waiting_day: 'Tempo esperando você por dia', r_projects: 'Projetos',
+      r_files: 'Arquivos mais editados', r_failing: 'Comandos que mais falharam', r_models: 'Tokens por modelo',
+      r_project: 'Projeto', r_sessions: 'Sessões', r_edits: 'edições', r_times: 'vezes', r_none: 'Nada registrado neste período.',
+      r_loading: 'Carregando relatório…', r_model: 'Modelo', r_input: 'Entrada', r_output: 'Saída', r_cache: 'Cache lido',
+      other: 'Outros',
       connecting: 'conectando…', live: 'ao vivo', disconnected: 'servidor desconectado, tentando reconectar…',
       view_office: 'Escritório', view_panel: 'Painel', all: 'Todos', all_projects: 'Todos os projetos',
       show_old: 'mostrar ociosas e encerradas', lang: 'EN',
@@ -129,5 +161,23 @@
   const NAMES = { claude: 'Claude', codex: 'Codex' };
   const clientName = c => NAMES[c] || (String(c || '?').charAt(0).toUpperCase() + String(c || '?').slice(1));
 
-  window.I18N = { t, lang, setLang, locale: lang === 'pt' ? 'pt-BR' : 'en-US', clientName };
+
+  // A first name per session, so agents are easier to tell apart than by session ids.
+  const NAMES_LIST = ['Alex', 'Sam', 'Robin', 'Kim', 'Ari', 'Noa', 'Rui', 'Lu', 'Dani', 'Cris', 'Val', 'Mika', 'Tai', 'Rafa', 'Gabi', 'Jo',
+    'Lee', 'Max', 'Nico', 'Pat', 'Quinn', 'Remy', 'Sky', 'Teo', 'Uma', 'Vic', 'Yuri', 'Zoe', 'Bia', 'Leo', 'Mel', 'Theo'];
+  // Unique while the page is open: a session keeps its name, and a name already
+  // taken by another session moves on to the next free one.
+  const named = new Map(), taken = new Set();
+  function agentName(key) {
+    if (named.has(key)) return named.get(key);
+    let h = 2166136261;
+    for (let i = 0; i < key.length; i++) { h ^= key.charCodeAt(i); h = Math.imul(h, 16777619); }
+    let i = (h >>> 0) % NAMES_LIST.length, tries = 0;
+    while (taken.has(NAMES_LIST[i]) && tries++ < NAMES_LIST.length) i = (i + 1) % NAMES_LIST.length;
+    const name = tries > NAMES_LIST.length ? NAMES_LIST[i] + ' ' + (named.size + 1) : NAMES_LIST[i];
+    named.set(key, name); taken.add(name);
+    return name;
+  }
+
+  window.I18N = { t, lang, setLang, locale: lang === 'pt' ? 'pt-BR' : 'en-US', clientName, agentName };
 })();

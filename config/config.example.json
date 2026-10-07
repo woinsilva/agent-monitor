@@ -1,0 +1,17 @@
+{
+  "language": "en",
+  "longRunningMinutes": 30,
+  "idleToBreakRoomMinutes": 15,
+
+  "notify": {
+    "ntfy": { "server": "https://ntfy.sh", "topic": "", "token": "" },
+    "telegram": { "botToken": "", "chatId": "" },
+    "events": { "waiting": true, "finished": false, "longRunning": true, "stale": false },
+    "waitingDelaySeconds": 30,
+    "details": false
+  },
+
+  "prices": {
+    "example-model-prefix": { "input": 0, "output": 0, "cacheRead": 0, "cacheWrite": 0 }
+  }
+}

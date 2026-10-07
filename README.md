@@ -6,9 +6,17 @@
 </p>
 
 <p align="center">
+  <a href="https://github.com/woinsilva/agent-monitor/actions/workflows/ci.yml"><img alt="CI" src="https://github.com/woinsilva/agent-monitor/actions/workflows/ci.yml/badge.svg"></a>
+  <a href="LICENSE"><img alt="MIT license" src="https://img.shields.io/badge/license-MIT-blue.svg"></a>
+  <img alt="Node 18+" src="https://img.shields.io/badge/node-%E2%89%A518-green.svg">
+  <img alt="No dependencies" src="https://img.shields.io/badge/dependencies-0-brightgreen.svg">
+</p>
+
+<p align="center">
   <a href="#quick-start">Quick start</a> ·
   <a href="#try-the-demo">Demo</a> ·
   <a href="#how-it-works">How it works</a> ·
+  <a href="#phone-notifications">Phone alerts</a> ·
   <a href="#other-agents">Other agents</a> ·
   <a href="README.pt-BR.md">Português</a>
 </p>
@@ -34,17 +42,30 @@ Agent Monitor answers that at a glance.
   | typing, monitor shows a terminal or code | running a command / editing files |
   | reading a sheet | reading or searching code |
   | standing, hand raised, yellow bubble | **waiting for your approval or answer** |
-  | holding a coffee | idle, turn finished |
+  | arms up, "done!" | just finished a turn |
+  | holding a coffee | idle |
+  | on the break-room sofa | idle for 15+ minutes |
   | head on the desk, `zZz` | no signal for 20+ minutes |
 
-  Agents walk in through the door when they start and leave when the session ends.
+  Everyone gets a first name, a blinking light marks the desk of whoever is waiting
+  for you, and agents walk in through the door when they start and leave when the
+  session ends.
 - **Same-file alert.** A red dashed line links two agents that edited the same file
   in the last hour, even across Claude Code and Codex.
 - **Panel view.** One card per session with the prompt, the current action and for
-  how long, tool calls, failures, files edited, context-window use and subagents.
+  how long, how long it has been on this prompt, the **last test run (passed / failed)**,
+  the **git branch and uncommitted files**, tool calls, failures, files edited,
+  context-window use and subagents.
+- **Report.** Agent-hours per day for Claude, Codex and others, **how much time your
+  agents spent waiting for you**, prompts, tool calls and failure rate, test runs,
+  tokens by model and estimated cost, per-project totals, most edited files and the
+  commands that fail most. Today, 7 or 14 days.
+- **Running-long alert** when a prompt goes past 30 minutes (configurable).
 - **History.** Click anyone to see their full timeline: prompts, commands, edits,
   permission requests, subagents, replies.
 - **Today's timeline** with how many agents ran at the same time.
+- **Phone notifications** through [ntfy](https://ntfy.sh) or Telegram when an agent
+  waits for you, runs long, goes silent or finishes, so you can step away from the desk.
 - **Desktop notifications** with a chime when an agent starts waiting for you
   (optionally also when one finishes), and a tab title like `(2) Waiting for you`.
 - **Token use** read from the agents' own session files, plus Codex's weekly limit.
@@ -55,7 +76,13 @@ Agent Monitor answers that at a glance.
 <details>
 <summary><b>Panel view</b></summary>
 <br>
-<img alt="The panel view: one card per agent with its current action, counters and subagents" src="docs/panel-dark.png">
+<img alt="The panel view: one card per agent with its current action, test result, git branch, counters and subagents" src="docs/panel-dark.png">
+</details>
+
+<details>
+<summary><b>Report view</b></summary>
+<br>
+<img alt="The report view: agent-hours per day by agent, time waiting for you, project totals, most edited files and failing commands" src="docs/report-dark.png">
 </details>
 
 ## Try the demo
@@ -128,6 +155,56 @@ Everything stays on your machine. The server only listens on `127.0.0.1`, and on
 metadata is recorded: tool names, the command or file path, and the first 300
 characters of each prompt. File contents and command output are never stored. Event
 files older than 14 days are deleted automatically. All of it lives in `data/`.
+
+## Phone notifications
+
+Get a push notification on your phone when an agent needs you, so you can leave the
+desk while agents work. Settings live in `config/config.json` (created by
+`node setup.js`, or copy `config/config.example.json`). Changes apply without a restart.
+
+**ntfy** (free, no account):
+
+1. Install the ntfy app ([Android](https://play.google.com/store/apps/details?id=io.heckel.ntfy) / [iOS](https://apps.apple.com/app/ntfy/id1625396347)).
+2. Subscribe to a topic with a long, random name, e.g. `agent-monitor-k3v9x2q7m1`.
+3. Put the same name in `config/config.json`:
+   ```json
+   "notify": { "ntfy": { "topic": "agent-monitor-k3v9x2q7m1" } }
+   ```
+4. `node lib/notify.js --test` sends a test message.
+
+On the public ntfy.sh server anyone who knows the topic name can read it, so keep the
+name hard to guess; you can also point `notify.ntfy.server` at your own ntfy server
+and set `token`.
+
+**Telegram:** create a bot with [@BotFather](https://t.me/BotFather), send it a message,
+take your chat id from `https://api.telegram.org/bot<token>/getUpdates`, and set
+`notify.telegram.botToken` and `chatId`.
+
+| Setting | Default | |
+|---|---|---|
+| `notify.events.waiting` | `true` | an agent is waiting for your approval or answer |
+| `notify.events.longRunning` | `true` | a prompt passed `longRunningMinutes` (30) |
+| `notify.events.stale` | `false` | a working agent went silent for 20+ minutes |
+| `notify.events.finished` | `false` | an agent finished its turn |
+| `notify.waitingDelaySeconds` | `30` | only alert if it is still waiting after this, so quick approvals at the desk don't buzz your phone |
+| `notify.details` | `false` | add the command or prompt to the message (off by default: messages leave your machine) |
+| `language` | `en` | `en` or `pt` |
+
+### Cost estimate
+
+Token use is always shown. To also estimate cost, add the prices you pay (USD per
+million tokens) under `prices`, keyed by model id prefix; the longest matching prefix
+wins:
+
+```json
+"prices": {
+  "claude-opus":   { "input": 0, "output": 0, "cacheRead": 0, "cacheWrite": 0 },
+  "gpt-6":         { "input": 0, "output": 0, "cacheRead": 0 }
+}
+```
+
+Fill in the current numbers from each provider's pricing page. On a subscription plan
+this is an API-equivalent estimate, not what you are billed.
 
 ## Installing the hooks
 
@@ -214,5 +291,12 @@ Append one JSON object per line to `data/events-YYYY-MM-DD.jsonl` (local date):
 | `report.js` | reporter for any other agent |
 | `server.js` | state, token reading, HTTP + live stream |
 | `public/` | the page: `index.html`, `office.js` (pixel-art office), `i18n.js` (strings) |
+| `lib/` | `config.js`, `notify.js` (phone alerts), `report.js` (the report) |
+| `config/` | `config.example.json`; your `config.json` stays out of git |
 | `demo.js` | demo mode with fictional agents |
+| `test/` | `node --test` (no dependencies), run in CI on Linux, macOS and Windows |
 | `setup.js`, `docker-compose.yml`, `Dockerfile` | Docker setup |
+
+## License
+
+[MIT](LICENSE)

@@ -18,6 +18,7 @@
 
 const fs = require('fs');
 const path = require('path');
+const { execFileSync } = require('child_process');
 
 const DATA_DIR = process.env.AGENT_MONITOR_DATA || path.join(__dirname, 'data');
 const CLIP = 300;
@@ -60,7 +61,7 @@ function describeTool(name, input) {
 
   if (/^(bash|powershell|shell|exec_command|local_shell|shell_command|container\.exec)$/.test(lower)) {
     const cmd = asCommand(i.command != null ? i.command : (i.cmd != null ? i.cmd : i.script));
-    return { kind: 'command', summary: clip(i.description ? i.description + ' — ' + cmd : cmd), files: [] };
+    return { kind: 'command', summary: clip(i.description ? i.description + ' — ' + cmd : cmd), files: [], command: cmd };
   }
   if (lower === 'apply_patch') {
     // Codex sends the patch text in tool_input.command; other shapes kept for safety
@@ -107,6 +108,34 @@ function rememberShape(client, event, data) {
   } catch (e) { /* best effort */ }
 }
 
+// Test runners, so the dashboard can show whether the agent's last test run passed.
+const TEST_CMD = /(^|[\s;&|(/\\])(jest|vitest|pytest|mocha|ava|tap|phpunit|rspec|playwright\s+test|cypress\s+run|go\s+test|cargo\s+test|dotnet\s+test|mvn\s+(-\S+\s+)*test|gradlew?\s+test|(npm|pnpm(\.cmd)?|yarn|bun)\s+(run\s+)?(test|e2e)[\w:-]*|node\s+--test|python\s+-m\s+(pytest|unittest))\b/i;
+const isTestCommand = cmd => TEST_CMD.test(String(cmd || ''));
+
+// Exit code from a tool result: Claude Code reports failures as PostToolUseFailure;
+// Codex returns text such as "Exit code: 1" or "Process exited with code 1".
+function exitCode(response) {
+  if (response == null) return null;
+  if (typeof response === 'object') {
+    for (const k of ['exit_code', 'exitCode', 'returncode', 'code']) if (Number.isInteger(response[k])) return response[k];
+    return null;
+  }
+  const m = String(response).slice(0, 2000).match(/exit(?:ed)?(?:\s+with)?(?:\s+code)?\s*[:=]?\s*(-?\d+)/i);
+  return m ? Number(m[1]) : null;
+}
+
+// Branch and number of uncommitted files, read at the start and end of a turn only.
+function gitInfo(cwd) {
+  try {
+    const run = args => execFileSync('git', args, { cwd, timeout: 1500, stdio: ['ignore', 'pipe', 'ignore'], windowsHide: true }).toString();
+    const branch = run(['rev-parse', '--abbrev-ref', 'HEAD']).trim();
+    const dirty = run(['status', '--porcelain', '--untracked-files=normal']).split('\n').filter(Boolean).length;
+    return { branch, dirty };
+  } catch (e) {
+    return null;
+  }
+}
+
 function main() {
   const event = process.argv[2] || '';
   const ci = process.argv.indexOf('--client');
@@ -147,6 +176,18 @@ function main() {
     if (data.tool_use_id || data.call_id) rec.callId = data.tool_use_id || data.call_id;
     if (typeof data.duration_ms === 'number') rec.durationMs = data.duration_ms;
     if (rec.event === 'PostToolUseFailure' || (data.tool_response && data.tool_response.is_error)) rec.failed = true;
+    if (d.kind === 'command' && isTestCommand(d.command)) {
+      rec.test = true;
+      if (rec.event === 'PostToolUse' || rec.event === 'PostToolUseFailure') {
+        const code = exitCode(data.tool_response);
+        if (code != null && code !== 0) rec.failed = true;
+        rec.testResult = rec.failed ? 'fail' : (code === 0 || client === 'claude' ? 'pass' : 'unknown');
+      }
+    }
+  }
+  if (rec.event === 'UserPromptSubmit' || rec.event === 'Stop') {
+    const git = gitInfo(rec.cwd);
+    if (git) rec.git = git;
   }
   if (typeof data.prompt === 'string') rec.prompt = clip(data.prompt);
   if (typeof data.message === 'string') rec.message = clip(data.message);
@@ -157,5 +198,9 @@ function main() {
   fs.appendFileSync(path.join(DATA_DIR, 'events-' + localDay(new Date()) + '.jsonl'), JSON.stringify(rec) + '\n');
 }
 
-try { main(); } catch (e) { /* never break the agent session */ }
-process.exit(0);
+if (require.main === module) {
+  try { main(); } catch (e) { /* never break the agent session */ }
+  process.exit(0);
+}
+
+module.exports = { describeTool, isTestCommand, exitCode, patchFiles };

@@ -8,6 +8,8 @@
   },
   "scripts": {
     "start": "node server.js",
+    "test": "node --test",
+    "notify:test": "node lib/notify.js --test",
     "demo": "node demo.js",
     "setup": "node setup.js",
     "docker": "node setup.js && docker compose up -d --build",

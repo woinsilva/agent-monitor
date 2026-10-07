@@ -21,6 +21,7 @@
   const SPEED = 48;                 // walking speed, logical px per second
   const FRAME_MS = 170;             // sprite animation step
   const MAX_INTERNS = 3;
+  const CHEER_MS = 6000;           // celebration after a turn ends
 
   const C = {
     wall: '#ece6db', wallTop: '#cfc6b6', wallLow: '#ddd4c4', base: '#8c6d4f',
@@ -48,7 +49,7 @@
 
   // ------------------------------------------------------------ state
   let wrap, canvas, ctx, layer, svg, emptyMsg, labels;
-  let H = 0, rows = 1, active = true, raf = 0, first = true;
+  let H = 0, rows = 1, active = true, raf = 0, first = true, skew = 0;
   let frame = 0, frameAt = 0, lastT = 0;
   let bg = null, bgKey = '';
   let data = { tops: [], kidsOf: () => [], conflicts: [], now: Date.now(), onOpen: () => {} };
@@ -97,9 +98,23 @@
   const reviewTop = () => FLOOR_TOP + rows * SLOT_H + 6;
   const REVIEW_SEATS = [[124, 50], [98, 56], [150, 56]];
 
+  const nowMs = () => Date.now() + skew;
+  const celebrating = a => a.type === 'main' && a.s.status === 'idle' && a.s.finishedAt && nowMs() - a.s.finishedAt < CHEER_MS;
+  const breakDue = a => {
+    const min = (data.settings && data.settings.idleToBreakRoomMinutes) || 15;
+    return a.type === 'main' && a.s.status === 'idle' && !celebrating(a) && nowMs() - a.s.statusSince >= min * 60000;
+  };
+  // sofa seats first, then standing around the counter
+  const BREAK_SPOTS = [[333, 68, true], [349, 68, true], [365, 68, true], [381, 68, true], [300, 36], [286, 40], [404, 36], [418, 40]];
+
   function home(a) {
     const st = a.s.status;
     if (a.type === 'main') {
+      if (a.breakIdx != null) {
+        const [x, dy, sofa] = BREAK_SPOTS[a.breakIdx % BREAK_SPOTS.length];
+        a.seated = !!sofa;
+        return { x, y: reviewTop() + dy };
+      }
       const o = slotXY(a.zone, a.slot);
       a.seated = st === 'working' || st === 'stale';
       return a.seated ? { x: o.x + 36, y: o.y + 48 } : { x: o.x + 62, y: o.y + 61 };
@@ -152,11 +167,11 @@
 
   function update(d) {
     data = d;
+    skew = (d.now || Date.now()) - Date.now();
     const want = new Map();
     for (const s of d.tops) {
       if (s.status === 'ended') continue;
       if (!ZONE_X[s.client]) { want.set(s.key, { s, type: 'ext', zone: 'review' }); continue; }
-      if (!ZONE_X[s.client]) continue;
       want.set(s.key, { s, type: 'main', zone: s.client });
       const kids = d.kidsOf(s.key).filter(k => k.status === 'working' || k.status === 'waiting' || k.status === 'stale');
       kids.slice(0, MAX_INTERNS).forEach((k, j) => want.set(k.key, { s: k, type: 'intern', zone: null, parentKey: s.key, j }));
@@ -173,9 +188,15 @@
       }
       a.s = w.s;
       a.j = w.j || 0;
-      if (first) { resize(); const h = home(a); a.x = h.x; a.y = h.y; a.mode = 'here'; }
     }
     for (const [key, a] of actors) if (!want.has(key) && a.mode !== 'out') a.mode = 'out';
+    // idle for a while -> the break room; spots handed out in a stable order
+    let b = 0;
+    for (const a of [...actors.values()].sort((p, q) => (p.key < q.key ? -1 : 1))) a.breakIdx = a.mode !== 'out' && breakDue(a) ? b++ : null;
+    if (first) {
+      resize();
+      for (const a of actors.values()) { const h = home(a); a.x = h.x; a.y = h.y; a.mode = 'here'; }
+    }
     first = false;
     resize();
     syncOverlay();
@@ -286,6 +307,12 @@
         else { px(x - pw / 2 + 1, ty + 1, pw - 2, 1, '#b8b8b0'); px(x - pw / 2 + 1, ty + 3, pw - 4, 1, '#b8b8b0'); }
         break;
       }
+      case 'cheer': {
+        const up = f % 2;
+        px(tx - d.aw, ty - 5 - up, d.aw, 7, L.shirt); px(tx - d.aw - up, ty - 7 - up, d.aw, 2, L.skin);
+        px(tx + d.tw, ty - 5 - up, d.aw, 7, L.shirt); px(tx + d.tw + up, ty - 7 - up, d.aw, 2, L.skin);
+        break;
+      }
       case 'think':
         px(tx + d.tw, ty + 1, d.aw, armH, L.shirt); px(tx + d.tw, ty + armH + 1, d.aw, 1, L.skin);
         px(tx - 1, ty + 1, d.aw, 3, L.shirt); px(x - 3, ty - 2, 2, 2, L.skin);
@@ -365,7 +392,13 @@
     }
   }
 
-  function desk(sx, sy, mode, deco) {
+  function desk(sx, sy, mode, deco, alarm) {
+    if (alarm) {
+      // blinking warning light on top of the monitor: someone needs you here
+      const on = frame % 4 < 2;
+      px(sx + 32, sy + 2, 8, 4, on ? '#ffb020' : '#8a5a00'); px(sx + 34, sy + 1, 4, 1, on ? '#ffd36b' : '#8a5a00');
+      if (on) { px(sx + 29, sy + 3, 2, 1, '#ffd36b'); px(sx + 41, sy + 3, 2, 1, '#ffd36b'); px(sx + 35, sy - 2, 2, 2, '#ffd36b'); }
+    }
     // monitor
     px(sx + 24, sy + 6, 24, 15, C.monitor);
     screen(sx + 26, sy + 8, mode, frame);
@@ -483,6 +516,7 @@
       return { pose: 'type', facing: 'back', noLegs: true, still: kind === 'thinking' || !kind };
     }
     if (s.status === 'waiting') return { pose: 'raise', facing: 'front' };
+    if (celebrating(a)) return { pose: 'cheer', facing: 'front', jump: true };
     return { pose: 'mug', facing: 'front' };
   }
 
@@ -510,7 +544,8 @@
         const a = key && actors.get(key);
         const atDesk = a && a.mode === 'here' && !a.moving ? a : null;
         const deco = hash(zone + i) % 12;
-        items.push({ y: o.y + 40, fn: () => desk(o.x, o.y, atDesk ? screenMode(atDesk) : 'off', deco) });
+        const alarm = !!(a && a.mode !== 'out' && a.s.status === 'waiting');
+        items.push({ y: o.y + 40, fn: () => desk(o.x, o.y, atDesk && a.breakIdx == null ? screenMode(atDesk) : 'off', deco, alarm) });
         items.push({ y: o.y + 49.5, fn: () => chair(o.x, o.y) });
       }
     }
@@ -531,7 +566,7 @@
     for (const a of actors.values()) {
       const p = poseFor(a);
       const seatedNow = a.seated && !a.moving && a.mode === 'here';
-      const y = a.y;
+      const y = p.jump && frame % 4 < 2 ? a.y - 2 : a.y;
       items.push({ y: a.type === 'ext' && seatedNow ? y0 + 45 : seatedNow ? y + 0.5 : y + 1, fn: () => {
         a.headTop = person(a.x, y, a.look, {
           pose: p.pose, facing: p.facing, mini: a.type === 'intern', tablet: p.tablet,
@@ -583,6 +618,7 @@
       return null;
     }
     if (a.type === 'intern') return null;
+    if (celebrating(a)) return { cls: 'done', text: t('o_done') };
     if (s.status === 'working') {
       const c = s.current;
       if (!c || c.kind === 'thinking') return { cls: 'think', text: t('o_thinking') };
@@ -611,7 +647,8 @@
       if (bub.dataset.h !== html) { bub.innerHTML = html; bub.dataset.h = html; }
       bub.className = 'ob' + (b ? ' ' + b.cls : ' none');
       const tag = el.lastChild;
-      const tagText = a.type === 'intern' ? '' : `${s.project}${s.session ? ' · ' + String(s.session).replace(new RegExp('^' + s.client + '-'), '').slice(0, 4) : ''}`;
+      const name = window.I18N ? I18N.agentName(a.key) : '';
+      const tagText = a.type === 'intern' ? '' : a.breakIdx != null ? name : `${name} · ${s.project}`;
       if (tag.textContent !== tagText) tag.textContent = tagText;
       el.title = a.type === 'intern'
         ? `${s.agentType || 'subagente'}: ${(s.current && s.current.summary) || s.status}`

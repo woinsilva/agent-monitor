@@ -41,4 +41,13 @@ for (const [name, dir, mount] of sources) {
 lines.push('AM_PATH_MAP=' + map.join(';'));
 
 fs.writeFileSync(path.join(__dirname, '.env'), lines.join('\n') + '\n');
+
+// config/config.json from the example, in this machine's language (never overwritten)
+const cfgFile = path.join(__dirname, 'config', 'config.json');
+if (!fs.existsSync(cfgFile)) {
+  const cfg = JSON.parse(fs.readFileSync(path.join(__dirname, 'config', 'config.example.json'), 'utf8'));
+  cfg.language = /^pt/i.test(Intl.DateTimeFormat().resolvedOptions().locale || '') ? 'pt' : 'en';
+  fs.writeFileSync(cfgFile, JSON.stringify(cfg, null, 2) + '\n');
+  console.log('Created config/config.json (phone notifications and prices go there).');
+}
 console.log('\nWrote .env  (time zone ' + lines[1].split('=')[1] + '). Next: docker compose up -d --build');

@@ -20,6 +20,11 @@ const fs = require('fs');
 const path = require('path');
 const http = require('http');
 const os = require('os');
+const config = require('./lib/config');
+const notifier = require('./lib/notify');
+const report = require('./lib/report');
+
+let startedAt = Infinity; // set once the replay of past events is done
 
 const PORT = Number(process.env.PORT) || 4400;
 const HOST = process.env.HOST || '127.0.0.1';
@@ -106,6 +111,9 @@ function getSession(ev, key, parentKey) {
       intervals: [],
       transcript: null,
       tokens: null,
+      test: null,        // last test run: { ts, result: running|pass|fail|unknown, summary }
+      git: null,         // { branch, dirty } at the last turn boundary
+      finishedAt: null,  // last time a turn ended after real work
     };
     sessions.set(key, s);
   }
@@ -145,6 +153,7 @@ function applyEvent(ev) {
   if (ev.cwd && !ev.agent) { top.cwd = ev.cwd; top.project = baseName(ev.cwd) || top.project; }
   if (ev.transcript && !ev.agent) top.transcript = ev.transcript;
   if (ev.model && !ev.agent) top.model = ev.model;
+  if (ev.git && !ev.agent) top.git = ev.git;
 
   // Subagent lifecycle and events fired from inside a subagent go to the child.
   let s = top;
@@ -179,6 +188,7 @@ function applyEvent(ev) {
       s.waitingFor = null;
       const id = ev.callId || ('t' + ev.ts + Math.random());
       s.inflight.set(id, { tool: ev.tool, kind: ev.kind, summary: ev.summary, since: ev.ts });
+      if (ev.test) s.test = { ts: ev.ts, result: 'running', summary: ev.summary };
       pushTimeline(s, ev, ev.summary);
       break;
     }
@@ -196,6 +206,7 @@ function applyEvent(ev) {
         pushTimeline(s, Object.assign({}, ev, { failed: true }), ev.summary || ev.tool);
       }
       for (const f of ev.files || []) s.files.set(f, ev.ts);
+      if (ev.test) s.test = { ts: ev.ts, result: ev.testResult || 'unknown', summary: ev.summary };
       if (s.status === 'waiting' || s.status === 'idle') { setStatus(s, 'working', ev.ts); openInterval(s, ev.ts); }
       s.waitingFor = null;
       break;
@@ -230,6 +241,8 @@ function applyEvent(ev) {
         t.output += ev.usage.completion_tokens || ev.usage.output_tokens || 0;
         t.total = (t.total || 0) + (ev.usage.total_tokens || 0);
       }
+      if (s.status === 'working' || s.status === 'waiting') s.finishedAt = ev.ts;
+      if (s.test && s.test.result === 'running') s.test.result = 'unknown';
       setStatus(s, 'idle', ev.ts);
       closeInterval(s, ev.ts);
       pushTimeline(s, ev, ev.reply);
@@ -438,6 +451,9 @@ function serialize(s, now) {
     timeline: s.timeline,
     intervals: s.intervals.slice(-200),
     tokens: s.tokens,
+    test: s.test,
+    git: s.git,
+    finishedAt: s.finishedAt,
   };
 }
 
@@ -473,13 +489,75 @@ function conflicts(now) {
 
 function snapshot() {
   const now = Date.now();
+  const cfg = config.load();
   return {
     now: now,
     host: HOST_LABEL,
     sessions: [...sessions.values()].map(s => serialize(s, now)),
     conflicts: conflicts(now),
     codexLimits: codexLimits.usedPercent == null ? null : codexLimits,
+    settings: { longRunningMinutes: cfg.longRunningMinutes, idleToBreakRoomMinutes: cfg.idleToBreakRoomMinutes },
+    phone: notifier.channels(cfg),
   };
+}
+
+// ---------------------------------------------------------------- phone notifications
+
+const sent = new Map(); // "<kind>:<key>" -> the moment it refers to (status start, turn start)
+
+function notifyName(s) {
+  const top = s.parentKey ? sessions.get(s.parentKey) : s;
+  const name = { claude: 'Claude', codex: 'Codex' }[s.client] || (s.client.charAt(0).toUpperCase() + s.client.slice(1));
+  return name + (s.agentType ? ' (' + s.agentType + ')' : '') + ' · ' + (top ? top.project : '');
+}
+
+function once(kind, s, moment, info) {
+  const k = kind + ':' + s.key;
+  if (sent.get(k) === moment) return;
+  sent.set(k, moment);
+  notifier.send(kind, Object.assign({ who: notifyName(s) }, info)).catch(() => {});
+}
+
+// Called every second. Only moments after the server started count, so replaying
+// old events on start never fires a burst of stale notifications.
+function checkNotifications() {
+  const cfg = config.load();
+  const ch = notifier.channels(cfg);
+  if (!ch.ntfy && !ch.telegram) return;
+  const on = cfg.notify.events || {};
+  const now = Date.now();
+  for (const s of sessions.values()) {
+    const st = effectiveStatus(s, now);
+    if (on.waiting && st === 'waiting' && s.statusSince > startedAt && now - s.statusSince >= (cfg.notify.waitingDelaySeconds || 0) * 1000) {
+      once('waiting', s, s.statusSince, { detail: s.waitingFor });
+    }
+    if (s.parentKey) continue;
+    if (on.finished && s.finishedAt && s.finishedAt > startedAt) {
+      once('finished', s, s.finishedAt, { detail: s.reply });
+    }
+    const longMs = (cfg.longRunningMinutes || 0) * 60000;
+    if (on.longRunning && longMs && st === 'working' && s.turnStart && s.turnStart > startedAt - longMs && now - s.turnStart >= longMs) {
+      once('longRunning', s, s.turnStart, { min: Math.round((now - s.turnStart) / 60000), detail: s.prompt });
+    }
+    if (on.stale && st === 'stale' && s.lastSeen > startedAt - STALE_MS) {
+      once('stale', s, s.lastSeen, { min: Math.round((now - s.lastSeen) / 60000), detail: s.prompt });
+    }
+  }
+}
+
+// ---------------------------------------------------------------- report
+
+let reportCache = { key: '', at: 0, data: null };
+
+function reportFor(days) {
+  const cfg = config.load();
+  const key = days + ':' + JSON.stringify(cfg.prices || {});
+  if (reportCache.key === key && Date.now() - reportCache.at < 15000) return reportCache.data;
+  const data = report.build({ dataDir: DATA_DIR, days, prices: cfg.prices, localFile, findCodexRollout });
+  data.models = data.models.filter(m => m.model !== '<synthetic>');
+  data.pricesConfigured = Object.keys(cfg.prices || {}).some(k => !/^example/.test(k));
+  reportCache = { key, at: Date.now(), data };
+  return data;
 }
 
 // ---------------------------------------------------------------- http
@@ -503,6 +581,13 @@ const server = http.createServer((req, res) => {
   if (url.pathname === '/api/state') {
     res.writeHead(200, { 'Content-Type': 'application/json; charset=utf-8', 'Cache-Control': 'no-store' });
     return res.end(JSON.stringify(snapshot()));
+  }
+  if (url.pathname === '/api/report') {
+    let body;
+    try { body = JSON.stringify(reportFor(Number(url.searchParams.get('days')) || 7)); }
+    catch (e) { res.writeHead(500); return res.end(JSON.stringify({ error: e.message })); }
+    res.writeHead(200, { 'Content-Type': 'application/json; charset=utf-8', 'Cache-Control': 'no-store' });
+    return res.end(body);
   }
   if (url.pathname === '/api/stream') {
     res.writeHead(200, { 'Content-Type': 'text/event-stream', 'Cache-Control': 'no-store', Connection: 'keep-alive' });
@@ -543,22 +628,37 @@ function tokenSweep() {
   if (any) schedulePush();
 }
 
-fs.mkdirSync(DATA_DIR, { recursive: true });
-cleanupOld();
-for (const f of eventFilesForDays(REPLAY_DAYS)) readEventsFile(f);
-for (const s of sessions.values()) { try { updateTokens(s); } catch (e) {} }
+function start() {
+  fs.mkdirSync(DATA_DIR, { recursive: true });
+  cleanupOld();
+  for (const f of eventFilesForDays(REPLAY_DAYS)) readEventsFile(f);
+  for (const s of sessions.values()) { try { updateTokens(s); } catch (e) {} }
+  startedAt = Date.now();
 
-setInterval(tick, 1000);
-setInterval(tokenSweep, 10000);
-setInterval(() => { for (const res of clients) { try { res.write(': ping\n\n'); } catch (e) {} } }, 25000);
+  setInterval(tick, 1000);
+  setInterval(checkNotifications, 1000);
+  setInterval(tokenSweep, 10000);
+  setInterval(() => { for (const res of clients) { try { res.write(': ping\n\n'); } catch (e) {} } }, 25000);
+  // keep "X min ago", stale and long-running states moving even when no event arrives
+  setInterval(schedulePush, 15000);
 
-server.on('error', err => {
-  if (err.code === 'EADDRINUSE') {
-    console.log('Agent Monitor is already running at http://localhost:' + PORT);
-    process.exit(0);
-  }
-  throw err;
-});
-server.listen(PORT, HOST, () => {
-  console.log('Agent Monitor: http://localhost:' + PORT + '  (' + sessions.size + ' sessions loaded)');
-});
+  server.on('error', err => {
+    if (err.code === 'EADDRINUSE') {
+      console.log('Agent Monitor is already running at http://localhost:' + PORT);
+      process.exit(0);
+    }
+    throw err;
+  });
+  server.listen(PORT, HOST, () => {
+    const ch = notifier.channels(config.load());
+    const phone = Object.keys(ch).filter(k => ch[k]);
+    console.log('Agent Monitor: http://localhost:' + PORT + '  (' + sessions.size + ' sessions loaded' + (phone.length ? ', notifications: ' + phone.join(' + ') : '') + ')');
+  });
+}
+
+// for the tests: rebuild state from scratch
+function reset() { sessions.clear(); fileCursors.clear(); }
+
+if (require.main === module) start();
+
+module.exports = { start, applyEvent, snapshot, reset, sessions, localFile, effectiveStatus };

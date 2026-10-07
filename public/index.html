@@ -195,6 +195,44 @@
   .office-empty { position: absolute; left: 50%; top: 42%; transform: translate(-50%, -50%); background: rgba(255,255,255,.88); color: #3c4450; padding: 12px 18px; border-radius: 10px; text-align: center; font-weight: 600; box-shadow: var(--shadow); }
   .office-empty span { font-weight: 400; font-size: 12.5px; color: #687280; }
 
+  /* card badges */
+  .badges { display: flex; gap: 6px; flex-wrap: wrap; }
+  .tag { font-size: 11.5px; padding: 1px 8px; border-radius: 999px; background: var(--panel-2); color: var(--muted); display: inline-flex; gap: 5px; align-items: center; white-space: nowrap; }
+  .tag.pass { color: var(--working); background: var(--working-soft); }
+  .tag.fail { color: var(--stale); background: var(--stale-soft); }
+  .tag.running, .tag.long { color: var(--waiting); background: var(--waiting-soft); }
+  .tag.git { font-family: var(--mono); font-size: 11px; }
+  .alert.long { background: var(--panel); border-color: color-mix(in srgb, var(--waiting) 35%, var(--border)); }
+  .phone { color: var(--muted); font-size: 12.5px; }
+
+  /* report: chart colors validated (light on white, dark on the dark panel) */
+  :root { --c-claude: #d9774b; --c-codex: #3d7be0; --c-other: #5e9400; --c-wait: #d98a00; }
+  @media (prefers-color-scheme: dark) { :root { --c-claude: #cc6a3e; --c-codex: #4f86e0; --c-other: #6ea61a; --c-wait: #d99520; } }
+  #rangeSeg { margin-bottom: 14px; }
+  .rgrid { display: grid; grid-template-columns: repeat(auto-fit, minmax(170px, 1fr)); gap: 10px; margin-bottom: 14px; }
+  .rcols { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+  .rcard { background: var(--panel); border: 1px solid var(--border); border-radius: 12px; padding: 14px 16px; box-shadow: var(--shadow); min-width: 0; }
+  .rcard h3 { margin: 0 0 10px; font-size: 13px; font-weight: 600; color: var(--muted); }
+  .rcard.wide { grid-column: 1 / -1; }
+  .stat .d { color: var(--muted); font-size: 12px; margin-top: 2px; }
+  .legend { display: flex; gap: 14px; flex-wrap: wrap; font-size: 12px; color: var(--muted); margin-bottom: 8px; }
+  .legend i { display: inline-block; width: 10px; height: 10px; border-radius: 2px; margin-right: 5px; vertical-align: -1px; }
+  .chart { position: relative; }
+  .chart svg { width: 100%; height: auto; display: block; overflow: visible; }
+  .chart .grid line { stroke: var(--border); stroke-width: 1; }
+  .chart text { fill: var(--faint); font-size: 11px; font-family: inherit; }
+  .chart .bar { cursor: default; }
+  .chart .bar:hover { filter: brightness(1.08); }
+  .tip { position: absolute; pointer-events: none; background: var(--text); color: var(--bg); font-size: 12px; padding: 6px 9px; border-radius: 6px; white-space: nowrap; transform: translate(-50%, -100%); margin-top: -8px; z-index: 3; }
+  .tip b { display: block; margin-bottom: 2px; }
+  table.rt { width: 100%; border-collapse: collapse; font-size: 12.5px; }
+  table.rt th { text-align: left; color: var(--muted); font-weight: 600; padding: 4px 6px; border-bottom: 1px solid var(--border); }
+  table.rt td { padding: 5px 6px; border-bottom: 1px solid var(--panel-2); font-variant-numeric: tabular-nums; }
+  table.rt td.num, table.rt th.num { text-align: right; }
+  table.rt td.mono { font-family: var(--mono); font-size: 12px; overflow-wrap: anywhere; }
+  .rbar { height: 6px; border-radius: 3px; background: var(--c-codex); opacity: .8; }
+  @media (max-width: 860px) { .rcols { grid-template-columns: 1fr; } }
+
   @media (max-width: 640px) {
     .ob { max-width: 140px; font-size: 10px; }
     .otag, .ol-sign { font-size: 9px; }
@@ -211,7 +249,7 @@
     <h1><span id="live" class="live"></span> Agent Monitor</h1>
     <span class="sub" id="hostline"></span>
     <div class="seg views" id="viewSeg">
-      <button data-v="office" class="on" data-i18n="view_office"></button><button data-v="panel" data-i18n="view_panel"></button>
+      <button data-v="office" class="on" data-i18n="view_office"></button><button data-v="panel" data-i18n="view_panel"></button><button data-v="report" data-i18n="view_report"></button>
     </div>
     <button class="btn lang" id="langBtn" data-i18n="lang"></button>
   </header>
@@ -223,6 +261,7 @@
     <select id="projectSel"></select>
     <label class="chk"><input type="checkbox" id="showOld"> <span data-i18n="show_old"></span></label>
     <div class="notify">
+      <span class="phone" id="phone"></span>
       <button class="btn" id="notifyBtn"></button>
       <label class="chk" id="notifyOpts" hidden><input type="checkbox" id="notifyDone"> <span data-i18n="notify_done"></span></label>
     </div>
@@ -239,8 +278,15 @@
     <section class="grid" id="cards"></section>
   </section>
 
-  <h2 data-i18n="h_timeline"></h2>
-  <section class="tl" id="timeline"></section>
+  <section id="reportView" hidden>
+    <div class="seg" id="rangeSeg"></div>
+    <div id="report"></div>
+  </section>
+
+  <section id="timelineView">
+    <h2 data-i18n="h_timeline"></h2>
+    <section class="tl" id="timeline"></section>
+  </section>
 
   <p class="hint" id="hint"></p>
 </div>
@@ -255,7 +301,7 @@
 <script src="office.js"></script>
 <script>
 (() => {
-  const { t, clientName } = I18N;
+  const { t, clientName, agentName } = I18N;
   const $ = id => document.getElementById(id);
   const esc = s => String(s == null ? '' : s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
   const store = (k, v) => { try { if (v === undefined) return localStorage.getItem(k); localStorage.setItem(k, v); } catch (e) { return null; } };
@@ -341,14 +387,35 @@
       return `<div class="subrow"><span class="dot ${k.status}"></span><span class="t">${esc(k.agentType || t('subagent'))}</span><span class="s" title="${esc(c)}">${esc(c)}</span><span class="foot">${k.status === 'done' ? t('ok') : ago(k.lastSeen)}</span></div>`;
     }).join('')}</div>` : '';
     return `<article class="card ${s.status}" data-key="${esc(s.key)}">
-      <div class="row">${badge(s.client)}<span class="proj" title="${esc(s.cwd)}">${esc(s.project)}</span><span class="model">${esc(shortModel(s.model))}</span><span class="pill ${s.status}">${esc(STATUS(s.status))}</span></div>
+      <div class="row">${badge(s.client)}<span class="proj" title="${esc(s.cwd)}">${esc(agentName(s.key))} · ${esc(s.project)}</span><span class="model">${esc(shortModel(s.model))}</span><span class="pill ${s.status}">${esc(STATUS(s.status))}</span></div>
       <div class="prompt ${s.prompt ? '' : 'none'}" title="${esc(s.prompt)}">${esc(s.prompt || t('no_prompt'))}</div>
       ${nowBlock(s)}
+      ${badgesRow(s)}
       ${s.status !== 'working' && s.reply ? `<div class="reply" title="${esc(s.reply)}">↳ ${esc(s.reply)}</div>` : ''}
       <div class="metrics"><span>${esc(t('n_tools', { n: s.toolCount }))}</span>${s.failCount ? `<span style="color:var(--stale)">${esc(t('n_fails', { n: s.failCount }))}</span>` : ''}<span>${esc(t('n_files', { n: s.files.length }))}</span>${kids.length ? `<span>${esc(t('n_subagents', { n: kids.length }))}</span>` : ''}${ctxMeter(s.tokens)}</div>
       ${subs}
       <div class="foot"><span>${esc(t('session_id', { id: shortId(s.session) }))}</span><span>${esc(t('started_at', { t: hhmm(s.firstSeen) }))}</span><span>${esc(t('last_signal', { ago: ago(s.lastSeen) }))}</span>${s.turns ? `<span>${esc(t('n_prompts', { n: s.turns }))}</span>` : ''}</div>
     </article>`;
+  }
+
+  const longMs = () => ((state && state.settings && state.settings.longRunningMinutes) || 30) * 60000;
+  const isLong = s => (s.status === 'working' || s.status === 'waiting') && s.turnStart && now() - s.turnStart >= longMs();
+
+  // prompt duration, long-running, last test run, git branch
+  function badgesRow(s) {
+    const out = [];
+    if ((s.status === 'working' || s.status === 'waiting') && s.turnStart) {
+      out.push(`<span class="tag ${isLong(s) ? 'long' : ''}">⏱ ${esc(t('this_prompt', { t: ago(s.turnStart) }))}${isLong(s) ? ' · ' + esc(t('long_running')) : ''}</span>`);
+    }
+    if (s.test) {
+      const r = s.test.result;
+      const icon = { pass: '✓', fail: '✗', running: '⟳', unknown: '•' }[r] || '•';
+      out.push(`<span class="tag ${esc(r)}" title="${esc(s.test.summary || '')} · ${hhmm(s.test.ts)}">${icon} ${esc(t('tests_' + r))}</span>`);
+    }
+    if (s.git && s.git.branch) {
+      out.push(`<span class="tag git" title="git">⎇ ${esc(s.git.branch)}${s.git.dirty ? ' · ' + esc(t('git_dirty', { n: s.git.dirty })) : ''}</span>`);
+    }
+    return out.length ? `<div class="badges">${out.join('')}</div>` : '';
   }
 
   function renderClientSeg(all) {
@@ -394,6 +461,7 @@
     const label = s => { const top = s.parentKey ? byKey.get(s.parentKey) : s; return `${clientName(s.client)} · ${top ? top.project : ''}${s.agentType ? ' · ' + s.agentType : ''}`; };
     $('alerts').innerHTML =
       (waiting.length ? `<div class="alert waiting"><b>${esc(t('a_waiting'))}</b><div class="items">${waiting.map(s => `<div class="it" data-key="${esc(s.parentKey || s.key)}">${esc(label(s))}: ${esc(s.waitingFor || t('your_answer'))} <span class="sub">(${esc(t('ago', { x: ago(s.statusSince) }))})</span></div>`).join('')}</div></div>` : '') +
+      (tops.filter(s => visible(s) && isLong(s)).length ? `<div class="alert long"><b>⏱ ${esc(t('a_long'))}</b><div class="items">${tops.filter(s => visible(s) && isLong(s)).map(s => `<div class="it" data-key="${esc(s.key)}">${esc(t('a_long_item', { who: agentName(s.key) + ' · ' + label(s), t: ago(s.turnStart) }))}</div>`).join('')}</div></div>` : '') +
       (conf.length ? `<div class="alert conflict"><b>${esc(t('a_same_file'))}</b><div class="items">${conf.map(c => `<div class="it" title="${esc(c.path)}">${esc(t('edited_by', { file: baseName(c.path), who: c.sessions.map(x => { const s = byKey.get(x.key); return s ? clientName(s.client) + ' ' + shortId(s.session) : x.key; }).join(t('and')) }))}</div>`).join('')}</div></div>` : '');
 
     // cards
@@ -405,8 +473,13 @@
     renderTimeline(tops.filter(visible), kidsOf);
     if (openKey) renderDrawer(byKey.get(openKey), kidsOf);
 
-    if (window.Office) Office.update({ tops: shown, kidsOf, conflicts: conf, now: now(), onOpen: openDrawer });
+    if (window.Office) Office.update({ tops: shown, kidsOf, conflicts: conf, now: now(), onOpen: openDrawer, settings: state.settings || {} });
     updateTitle(scoped);
+
+    const ph = state.phone || {};
+    const chs = Object.keys(ph).filter(k => ph[k]);
+    $('phone').textContent = chs.length ? t('phone_on', { ch: chs.join(' + ') }) : t('phone_off');
+    $('phone').title = chs.length ? '' : t('phone_hint');
   }
 
   // ---------------------------------------------------------- title + favicon
@@ -494,12 +567,140 @@
 
   // ---------------------------------------------------------- views
   function setView(v) {
+    if (!['office', 'panel', 'report'].includes(v)) v = 'office';
     ui.view = v; store('am.view', v);
     for (const b of $('viewSeg').children) b.classList.toggle('on', b.dataset.v === v);
     $('officeView').hidden = v !== 'office';
     $('panelView').hidden = v !== 'panel';
+    $('reportView').hidden = v !== 'report';
+    $('timelineView').hidden = v === 'report';
+    $('alerts').hidden = v === 'report';
     if (window.Office) Office.setActive(v === 'office');
+    if (v === 'report') loadReport();
   }
+
+  // ---------------------------------------------------------- report
+  let reportDays = Number(store('am.days')) || 7;
+  let reportTimer = null;
+  const HOURS = ms => ms / 3600000;
+  const fmtH = ms => { const h = HOURS(ms); return h >= 10 ? Math.round(h) + 'h' : h >= 1 ? h.toFixed(1).replace('.0', '') + 'h' : Math.round(ms / 60000) + 'min'; };
+  const pct = (a, b) => (b ? Math.round(a / b * 100) : 0);
+  const money = n => new Intl.NumberFormat(I18N.locale, { style: 'currency', currency: 'USD', maximumFractionDigits: n < 10 ? 2 : 0 }).format(n);
+  const dayLabel = d => new Date(d + 'T12:00:00').toLocaleDateString(I18N.locale, { weekday: 'short', day: '2-digit' });
+
+  function renderRange() {
+    $('rangeSeg').innerHTML = [1, 7, 14].map(n => `<button data-days="${n}" class="${n === reportDays ? 'on' : ''}">${esc(t('r_days', { n }))}</button>`).join('');
+  }
+  $('rangeSeg').onclick = e => {
+    const b = e.target.closest('button[data-days]');
+    if (!b) return;
+    reportDays = Number(b.dataset.days); store('am.days', String(reportDays));
+    loadReport();
+  };
+
+  async function loadReport() {
+    clearTimeout(reportTimer);
+    renderRange();
+    if (!$('report').innerHTML) $('report').innerHTML = `<div class="sub">${esc(t('r_loading'))}</div>`;
+    try {
+      const r = await (await fetch('/api/report?days=' + reportDays)).json();
+      renderReport(r);
+    } catch (e) {
+      $('report').innerHTML = `<div class="sub">${esc(String(e))}</div>`;
+    }
+    if (ui.view === 'report') reportTimer = setTimeout(loadReport, 60000);
+  }
+
+  // vertical bars, one per day; series stacked bottom-up with a 2px gap; hover tooltip per segment
+  function barChart(days, series, opts) {
+    const W = 640, H = 190, padL = 36, padB = 22, padT = 8;
+    const totals = days.map(d => series.reduce((a, s) => a + s.value(d), 0));
+    const max = Math.max(...totals, opts.minMax || 1);
+    const step = niceStep(max / 4);
+    const top = Math.ceil(max / step) * step;
+    const y = v => padT + (H - padT - padB) * (1 - v / top);
+    const bw = Math.min(46, (W - padL) / days.length * 0.6);
+    const x = i => padL + (W - padL) / days.length * (i + 0.5);
+    let grid = '';
+    for (let v = 0; v <= top + 1e-9; v += step) grid += `<line x1="${padL}" x2="${W}" y1="${y(v)}" y2="${y(v)}"/><text x="${padL - 6}" y="${y(v) + 4}" text-anchor="end">${esc(opts.fmt(v))}</text>`;
+    let bars = '';
+    days.forEach((d, i) => {
+      let base = 0;
+      series.forEach((s, si) => {
+        const v = s.value(d);
+        if (!v) return;
+        const y0 = y(base), y1 = y(base + v);
+        const h = Math.max(1, y0 - y1 - (si ? 2 : 0));
+        const r = base + v === totals[i] ? 4 : 0; // round only the top end
+        bars += `<path class="bar" fill="${s.color}" d="${roundTop(x(i) - bw / 2, y1, bw, h, r)}" data-tip="${esc(`<b>${dayLabel(d.day)}</b>${s.label}: ${opts.fmt(v)}`)}"/>`;
+        base += v;
+      });
+      bars += `<text x="${x(i)}" y="${H - 5}" text-anchor="middle">${esc(dayLabel(d.day))}</text>`;
+    });
+    const legend = series.length > 1 ? `<div class="legend">${series.map(s => `<span><i style="background:${s.color}"></i>${esc(s.label)}</span>`).join('')}</div>` : '';
+    return `${legend}<div class="chart"><svg viewBox="0 0 ${W} ${H}" role="img" aria-label="${esc(opts.label)}"><g class="grid">${grid}</g>${bars}</svg></div>`;
+  }
+  function niceStep(raw) {
+    const p = Math.pow(10, Math.floor(Math.log10(raw || 1)));
+    const n = raw / p;
+    return (n <= 1 ? 1 : n <= 2 ? 2 : n <= 5 ? 5 : 10) * p;
+  }
+  function roundTop(x, y, w, h, r) {
+    r = Math.min(r, w / 2, h);
+    return `M${x},${y + h}V${y + r}Q${x},${y} ${x + r},${y}H${x + w - r}Q${x + w},${y} ${x + w},${y + r}V${y + h}Z`;
+  }
+
+  function renderReport(r) {
+    const T = r.totals;
+    if (!T.hours && !T.prompts && !T.tools) { $('report').innerHTML = `<div class="empty">${esc(t('r_none'))}</div>`; return; }
+    const tiles = [
+      [fmtH(T.hours), t('r_hours')],
+      [fmtH(T.waiting), t('r_waiting'), t('r_waiting_share', { p: pct(T.waiting, T.hours) })],
+      [T.prompts, t('r_prompts')],
+      [T.tools, t('r_tools'), t('r_fail_rate', { p: pct(T.failures, T.tools) })],
+      [T.testsPass + T.testsFail, t('r_tests'), t('r_tests_detail', { pass: T.testsPass, fail: T.testsFail })],
+      [fmtK(T.tokens), t('r_tokens')],
+      [r.pricesConfigured ? money(T.cost) : '—', t('r_cost'), !r.pricesConfigured ? t('r_cost_none') : T.unpricedTokens ? t('r_cost_partial') : ''],
+    ];
+    const hourSeries = [
+      { label: 'Claude', color: 'var(--c-claude)', value: d => HOURS(d.hours.claude) },
+      { label: 'Codex', color: 'var(--c-codex)', value: d => HOURS(d.hours.codex) },
+      { label: t('other'), color: 'var(--c-other)', value: d => HOURS(d.hours.other) },
+    ].filter(s => r.days.some(d => s.value(d) > 0));
+    const hfmt = v => (v >= 1 || v === 0 ? (Math.round(v * 10) / 10) + 'h' : Math.round(v * 60) + 'min');
+    const maxTokens = Math.max(1, ...r.projects.map(p => p.tokens));
+
+    $('report').innerHTML = `
+      <div class="rgrid">${tiles.map(([n, l, d]) => `<div class="stat"><div class="n">${esc(n)}</div><div class="l">${esc(l)}</div>${d ? `<div class="d">${esc(d)}</div>` : ''}</div>`).join('')}</div>
+      <div class="rcols">
+        <div class="rcard"><h3>${esc(t('r_by_day'))}</h3>${barChart(r.days, hourSeries.length ? hourSeries : [{ label: 'Claude', color: 'var(--c-claude)', value: () => 0 }], { fmt: hfmt, label: t('r_by_day'), minMax: 1 })}</div>
+        <div class="rcard"><h3>${esc(t('r_waiting_day'))}</h3>${barChart(r.days, [{ label: t('r_waiting'), color: 'var(--c-wait)', value: d => HOURS(d.waiting) }], { fmt: hfmt, label: t('r_waiting_day'), minMax: 0.25 })}</div>
+        <div class="rcard wide"><h3>${esc(t('r_projects'))}</h3>
+          <table class="rt"><thead><tr><th>${esc(t('r_project'))}</th><th class="num">${esc(t('r_hours'))}</th><th class="num">${esc(t('r_waiting'))}</th><th class="num">${esc(t('r_prompts'))}</th><th class="num">${esc(t('r_tools'))}</th><th class="num">${esc(t('n_fails', { n: 2 }).replace(/^2 /, ''))}</th><th class="num">${esc(t('r_sessions'))}</th><th class="num">${esc(t('r_tokens'))}</th>${r.pricesConfigured ? `<th class="num">${esc(t('r_cost'))}</th>` : ''}</tr></thead>
+          <tbody>${r.projects.map(p => `<tr><td>${esc(p.project)}</td><td class="num">${fmtH(p.hours)}</td><td class="num">${fmtH(p.waiting)}</td><td class="num">${p.prompts}</td><td class="num">${p.tools}</td><td class="num">${p.failures}</td><td class="num">${p.sessions}</td><td class="num" title="${p.tokens}">${fmtK(p.tokens)}</td>${r.pricesConfigured ? `<td class="num">${money(p.cost)}</td>` : ''}</tr>`).join('')}</tbody></table>
+        </div>
+        <div class="rcard"><h3>${esc(t('r_files'))}</h3>${r.files.length ? `<table class="rt"><tbody>${r.files.map(f => `<tr><td class="mono" title="${esc(f.project)}">${r.projects.length > 1 ? `<span style="color:var(--muted)">${esc(f.project)}/</span>` : ''}${esc(f.file)}</td><td class="num">${f.edits} ${esc(t('r_edits'))}</td></tr>`).join('')}</tbody></table>` : `<div class="sub">—</div>`}</div>
+        <div class="rcard"><h3>${esc(t('r_failing'))}</h3>${r.failing.length ? `<table class="rt"><tbody>${r.failing.map(f => `<tr><td class="mono">${esc(f.command)}</td><td class="num">${f.count} ${esc(t('r_times'))}</td></tr>`).join('')}</tbody></table>` : `<div class="sub">—</div>`}</div>
+        ${r.models.length ? `<div class="rcard wide"><h3>${esc(t('r_models'))}</h3>
+          <table class="rt"><thead><tr><th>${esc(t('r_model'))}</th><th class="num">${esc(t('r_input'))}</th><th class="num">${esc(t('r_cache'))}</th><th class="num">${esc(t('r_output'))}</th>${r.pricesConfigured ? `<th class="num">${esc(t('r_cost'))}</th>` : ''}</tr></thead>
+          <tbody>${r.models.map(m => `<tr><td class="mono">${esc(m.model)}</td><td class="num">${fmtK(m.input + m.cacheWrite)}</td><td class="num">${fmtK(m.cacheRead)}</td><td class="num">${fmtK(m.output)}</td>${r.pricesConfigured ? `<td class="num">${m.priced ? money(m.cost) : '—'}</td>` : ''}</tr>`).join('')}</tbody></table>
+        </div>` : ''}
+      </div>`;
+  }
+
+  // one tooltip for every chart mark
+  const tip = document.createElement('div');
+  tip.className = 'tip'; tip.hidden = true;
+  document.body.appendChild(tip);
+  document.addEventListener('mousemove', e => {
+    const m = e.target.closest && e.target.closest('[data-tip]');
+    if (!m) { tip.hidden = true; return; }
+    tip.innerHTML = m.dataset.tip;
+    tip.hidden = false;
+    tip.style.position = 'fixed';
+    tip.style.left = e.clientX + 'px';
+    tip.style.top = e.clientY + 'px';
+  });
   for (const b of $('viewSeg').children) b.onclick = () => setView(b.dataset.v);
   if (window.Office) Office.mount($('office'));
   setView(ui.view);
@@ -573,7 +774,7 @@
     if (!s) { closeDrawer(); return; }
     const kids = kidsOf(s.key);
     const tk = s.tokens;
-    $('drawerHead').innerHTML = `<div class="row">${badge(s.client)}<span class="proj">${esc(s.project)}</span><span class="pill ${s.status}">${esc(STATUS(s.status))}</span><button class="x" id="closeX" aria-label="${esc(t('close'))}">✕</button></div>
+    $('drawerHead').innerHTML = `<div class="row">${badge(s.client)}<span class="proj">${esc(s.parentKey ? (s.agentType || t('subagent')) : agentName(s.key))} · ${esc(s.project)}</span><span class="pill ${s.status}">${esc(STATUS(s.status))}</span><button class="x" id="closeX" aria-label="${esc(t('close'))}">✕</button></div>
       <div class="prompt" style="-webkit-line-clamp:4">${esc(s.prompt || t('no_prompt'))}</div>${nowBlock(s)}`;
     const keepScroll = $('drawerBody').scrollTop;
     const merged = [s, ...kids].flatMap(x => x.timeline.map(e => Object.assign({ who: x.parentKey ? (x.agentType || t('subagent')) : null }, e))).sort((a, b) => b.ts - a.ts).slice(0, 150);
