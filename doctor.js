@@ -22,6 +22,31 @@ function hookStatus(file) {
   }
 }
 
+function commandIsOurs(command) {
+  return typeof command === 'string' &&
+    command.replace(/\\/g, '/').includes('/agent-bridge.js"') &&
+    / (cursor|gemini) [A-Za-z]+$/.test(command);
+}
+
+function adapterStatus(file, agent) {
+  if (!fs.existsSync(file)) return { configPresent: false, agentMonitorHooks: false };
+  try {
+    const config = JSON.parse(fs.readFileSync(file, 'utf8').replace(/^\uFEFF/, ''));
+    let found = false;
+    for (const entries of Object.values(config.hooks || {})) {
+      if (!Array.isArray(entries)) continue;
+      for (const entry of entries) {
+        if (agent === 'cursor' && commandIsOurs(entry && entry.command)) found = true;
+        if (agent === 'gemini' && entry && Array.isArray(entry.hooks) &&
+          entry.hooks.some(h => commandIsOurs(h.command))) found = true;
+      }
+    }
+    return { configPresent: true, agentMonitorHooks: found };
+  } catch (_) {
+    return { configPresent: true, agentMonitorHooks: false, warning: 'Cannot parse hooks configuration' };
+  }
+}
+
 function inspect(options = {}) {
   const home = options.home || os.homedir();
   const repo = options.repo || __dirname;
@@ -39,6 +64,8 @@ function inspect(options = {}) {
     integrations: {
       claudeCode: hookStatus(path.join(home, '.claude', 'settings.json')),
       codexCli: hookStatus(path.join(home, '.codex', 'hooks.json')),
+      cursor: adapterStatus(path.join(home, '.cursor', 'hooks.json'), 'cursor'),
+      geminiCli: adapterStatus(path.join(home, '.gemini', 'settings.json'), 'gemini'),
     },
     note: 'Configuration detection is not proof that the agent emits events. Test a fresh session before claiming support.',
   };
@@ -62,4 +89,4 @@ function main(argv = process.argv.slice(2)) {
 }
 
 if (require.main === module) main();
-module.exports = { hookStatus, inspect, main };
+module.exports = { hookStatus, adapterStatus, inspect, main };
