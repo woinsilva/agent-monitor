@@ -321,3 +321,43 @@ Append one JSON object per line to `data/events-YYYY-MM-DD.jsonl` (local date):
 ## License
 
 [MIT](LICENSE)
+
+
+## Agent compatibility preview (development branch)
+
+The stable published version starts with native **Claude Code** and **Codex CLI**
+hooks. A development branch adds **Cursor** and **Gemini CLI** adapters, but
+these are not production-supported until real sessions have been verified on
+each tool. No implementation can reliably monitor every AI model by name alone;
+support depends on the coding-agent runtime and its telemetry hooks.
+
+On the development branch, inspect the installation without changing anything:
+
+```sh
+node doctor.js --json
+```
+
+For Cursor and Gemini CLI, review the proposed configuration in dry-run mode:
+
+```sh
+node configure-agent.js --agent cursor --project /path/to/project
+node configure-agent.js --agent gemini --project /path/to/project
+```
+
+After checking the configuration changes and confirming permission:
+
+```sh
+node configure-agent.js --agent cursor --project /path/to/project --apply
+node configure-agent.js --agent gemini --project /path/to/project --apply
+```
+
+The installer keeps backups in `*.bak-agent-monitor` and can remove its own hooks with
+`--remove`. **Restart the chosen agent and verify new event files** before treating
+the integration as working. Configured hooks alone are insufficient evidence.
+On Windows, use a suitable absolute project path. When Node isn't discoverable
+on the agent's PATH, the bridge cannot run.
+
+The dashboard and Free version remain locally hosted and MIT licensed.
+See [integration roadmap](docs/integration-roadmap.md) for known coverage gaps and
+the proposed agent-independent event format. A future commercial Agensi skill
+will be distributed separately, not embedded in this public repository.
