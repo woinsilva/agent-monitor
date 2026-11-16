@@ -59,7 +59,7 @@ function describeTool(name, input) {
   const file = i.file_path || i.notebook_path || i.path || null;
   const lower = n.toLowerCase();
 
-  if (/^(bash|powershell|shell|exec_command|local_shell|shell_command|container\.exec)$/.test(lower)) {
+  if (/^(bash|powershell|shell|exec_command|local_shell|shell_command|run_shell_command|container\.exec)$/.test(lower)) {
     const cmd = asCommand(i.command != null ? i.command : (i.cmd != null ? i.cmd : i.script));
     return { kind: 'command', summary: clip(i.description ? i.description + ' — ' + cmd : cmd), files: [], command: cmd };
   }
