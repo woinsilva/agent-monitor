@@ -63,7 +63,8 @@ function normalize(client, name, raw) {
   if (typeof raw.subagent_id === 'string') result.subagent_id = raw.subagent_id;
   if (typeof raw.agent_type === 'string') result.agent_type = raw.agent_type;
   // Do not forward transcript_path: other agents' transcript formats are not supported yet.
-  if (event === 'Stop' && typeof raw.response === 'string') result.last_assistant_message = raw.response;
+  if (event === 'Stop' && typeof raw.prompt_response === 'string') result.last_assistant_message = raw.prompt_response;
+  else if (event === 'Stop' && typeof raw.response === 'string') result.last_assistant_message = raw.response;
   return { event, payload: result };
 }
 
@@ -85,7 +86,14 @@ function main(argv = process.argv.slice(2)) {
     // Monitoring must never interrupt an AI coding session.
   } finally {
     // Gemini CLI requires valid JSON stdout. Cursor accepts an empty object.
-    process.stdout.write('{}\n');
+    const response = client === 'cursor' && name === 'preToolUse'
+      ? { permission: 'allow' }
+      : client === 'cursor' && name === 'subagentStart'
+        ? { permission: 'allow' }
+        : client === 'cursor' && name === 'beforeSubmitPrompt'
+          ? { continue: true }
+          : {};
+    process.stdout.write(JSON.stringify(response) + '\n');
   }
 }
 
