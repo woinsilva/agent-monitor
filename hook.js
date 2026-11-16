@@ -70,14 +70,14 @@ function describeTool(name, input) {
     const files = patchFiles(body);
     return { kind: 'edit', summary: files.length ? 'patch: ' + files.join(', ') : 'apply_patch', files: files };
   }
-  if (/^(edit|multiedit|write|notebookedit)$/.test(lower)) {
+  if (/^(edit|multiedit|write|notebookedit|write_file|replace|delete)$/.test(lower)) {
     return { kind: 'edit', summary: file || n, files: file ? [file] : [] };
   }
-  if (lower === 'read') return { kind: 'read', summary: file || n, files: [] };
-  if (lower === 'grep') return { kind: 'search', summary: clip('"' + (i.pattern || '') + '"' + (i.path ? ' · ' + i.path : '')), files: [] };
+  if (lower === 'read' || lower === 'read_file' || lower === 'read_many_files') return { kind: 'read', summary: file || n, files: [] };
+  if (lower === 'grep' || lower === 'search_file_content') return { kind: 'search', summary: clip('"' + (i.pattern || '') + '"' + (i.path ? ' · ' + i.path : '')), files: [] };
   if (lower === 'glob') return { kind: 'search', summary: clip(i.pattern || ''), files: [] };
-  if (lower === 'webfetch') return { kind: 'web', summary: clip(i.url || ''), files: [] };
-  if (lower === 'websearch' || lower === 'web_search') return { kind: 'web', summary: clip(i.query || ''), files: [] };
+  if (lower === 'webfetch' || lower === 'web_fetch') return { kind: 'web', summary: clip(i.url || ''), files: [] };
+  if (lower === 'websearch' || lower === 'web_search' || lower === 'google_web_search') return { kind: 'web', summary: clip(i.query || ''), files: [] };
   if (lower === 'agent' || lower === 'task' || lower === 'spawn_agent') {
     return { kind: 'agent', summary: clip((i.subagent_type ? '[' + i.subagent_type + '] ' : '') + (i.description || i.prompt || i.message || '')), files: [] };
   }
@@ -86,7 +86,7 @@ function describeTool(name, input) {
 
   // MCP and anything else: show the most telling field we can find.
   const hint = i.description || i.query || i.url || i.command || file || '';
-  return { kind: n.startsWith('mcp__') ? 'mcp' : 'other', summary: clip(hint ? asCommand(hint) : ''), files: file ? [file] : [] };
+  return { kind: (n.startsWith('mcp__') || lower.startsWith('mcp:')) ? 'mcp' : 'other', summary: clip(hint ? asCommand(hint) : ''), files: file ? [file] : [] };
 }
 
 // Keep one example per (client, event) of which fields arrive, so the
@@ -175,7 +175,7 @@ function main() {
     if (d.files.length) rec.files = d.files.slice(0, 20);
     if (data.tool_use_id || data.call_id) rec.callId = data.tool_use_id || data.call_id;
     if (typeof data.duration_ms === 'number') rec.durationMs = data.duration_ms;
-    if (rec.event === 'PostToolUseFailure' || (data.tool_response && data.tool_response.is_error)) rec.failed = true;
+    if (rec.event === 'PostToolUseFailure' || data.is_error === true || (data.tool_response && data.tool_response.is_error)) rec.failed = true;
     if (d.kind === 'command' && isTestCommand(d.command)) {
       rec.test = true;
       if (rec.event === 'PostToolUse' || rec.event === 'PostToolUseFailure') {
@@ -192,6 +192,7 @@ function main() {
   if (typeof data.prompt === 'string') rec.prompt = clip(data.prompt);
   if (typeof data.message === 'string') rec.message = clip(data.message);
   if (typeof data.last_assistant_message === 'string') rec.reply = clip(data.last_assistant_message);
+  if (rec.event === 'Stop' && data.is_error === true) rec.failed = true;
   if (data.reason) rec.reason = clip(data.reason, 80);
   if (data.source) rec.source = clip(data.source, 40);
 
