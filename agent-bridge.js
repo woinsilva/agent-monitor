@@ -30,8 +30,12 @@ const EVENT_MAP = {
 };
 
 function normalize(client, name, raw) {
-  const event = EVENT_MAP[client] && EVENT_MAP[client][name];
-  if (!event || !raw || typeof raw !== 'object' || Array.isArray(raw)) return null;
+  const configuredEvent = EVENT_MAP[client] && EVENT_MAP[client][name];
+  if (!configuredEvent || !raw || typeof raw !== 'object' || Array.isArray(raw)) return null;
+  // Only the documented ToolPermission notification signals a permission wait.
+  // Do not infer approval requests from free-form notification messages.
+  const event = client === 'gemini' && name === 'Notification' &&
+    raw.notification_type === 'ToolPermission' ? 'PermissionRequest' : configuredEvent;
   const cwd = (typeof raw.cwd === 'string' && raw.cwd) || (Array.isArray(raw.workspace_roots) && typeof raw.workspace_roots[0] === 'string' && raw.workspace_roots[0]) || process.cwd();
   const result = {
     session_id: [raw.session_id, raw.conversation_id, raw.thread_id].find(v => typeof v === 'string' && v) || 'unknown',
@@ -64,8 +68,8 @@ function normalize(client, name, raw) {
   if (raw.is_error === true || raw.isError === true || result.is_error === true) {
     result.tool_response = { is_error: true };
   }
-  if (typeof raw.message === 'string' && event === 'Notification') result.message = raw.message;
-  if (typeof raw.notification_type === 'string' && event === 'Notification' && !result.message) result.message = raw.notification_type;
+  if (typeof raw.message === 'string' && (event === 'Notification' || event === 'PermissionRequest')) result.message = raw.message;
+  if (typeof raw.notification_type === 'string' && (event === 'Notification' || event === 'PermissionRequest') && !result.message) result.message = raw.notification_type;
   if (typeof raw.agent_id === 'string') result.agent_id = raw.agent_id;
   if (typeof raw.subagent_id === 'string') result.subagent_id = raw.subagent_id;
   if (typeof raw.agent_type === 'string') result.agent_type = raw.agent_type;
