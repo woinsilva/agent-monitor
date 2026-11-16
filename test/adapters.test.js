@@ -23,7 +23,7 @@ test('Cursor preToolUse maps to normalized tool event and excludes identity', ()
 test('Gemini uses BeforeAgent and AfterAgent rather than invented hook events', () => {
   assert.equal(normalize('gemini', 'BeforeAgent', { session_id: 's1', prompt: 'hello' }).event, 'UserPromptSubmit');
   assert.equal(normalize('gemini', 'AfterAgent', { session_id: 's1' }).event, 'Stop');
-  assert.equal(normalize('gemini', 'Unknown', {}).event, undefined);
+  assert.equal(normalize('gemini', 'Unknown', {}), null);
 });
 
 test('normalizer excludes raw tool output and transcript', () => {
