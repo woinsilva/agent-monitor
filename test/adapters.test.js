@@ -73,3 +73,23 @@ test('dry-run installer changes nothing', () => {
   assert.match(result.stdout, /DRY RUN/);
   assert.equal(fs.existsSync(path.join(dir, '.cursor')), false);
 });
+
+test('Cursor preToolUse hook observes without blocking execution', () => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'am-cursor-'));
+  const result = spawnSync(process.execPath, [path.join(__dirname, '..', 'agent-bridge.js'), 'cursor', 'preToolUse'], {
+    input: JSON.stringify({ conversation_id: 'c-1', tool_name: 'Shell', tool_input: { command: 'echo safe' } }),
+    env: { ...process.env, AGENT_MONITOR_DATA: dir }, encoding: 'utf8',
+  });
+  assert.equal(result.status, 0);
+  assert.deepEqual(JSON.parse(result.stdout), { permission: 'allow' });
+  const events = fs.readdirSync(dir).filter(f => f.startsWith('events-'));
+  assert.equal(events.length, 1);
+});
+
+test('Cursor prompt hook does not prevent sending the prompt', () => {
+  const result = spawnSync(process.execPath, [path.join(__dirname, '..', 'agent-bridge.js'), 'cursor', 'beforeSubmitPrompt'], {
+    input: JSON.stringify({ conversation_id: 'c-1', prompt: 'hello' }), encoding: 'utf8',
+  });
+  assert.equal(result.status, 0);
+  assert.deepEqual(JSON.parse(result.stdout), { continue: true });
+});
