@@ -40,3 +40,16 @@ test('inspects without creating files or claiming telemetry is verified', () => 
   assert.equal(result.integrations.claudeCode.agentMonitorHooks, false);
   assert.equal(fs.existsSync(path.join(home, '.claude')), false);
 });
+
+test('project-scoped Cursor configuration appears in diagnostics', () => {
+  const home = fs.mkdtempSync(path.join(os.tmpdir(), 'am-doctor-home-'));
+  const project = fs.mkdtempSync(path.join(os.tmpdir(), 'am-doctor-project-'));
+  const configDir = path.join(project, '.cursor');
+  fs.mkdirSync(configDir);
+  fs.writeFileSync(path.join(configDir, 'hooks.json'), JSON.stringify({
+    version: 1, hooks: { postToolUse: [{ command: 'node "/tmp/agent-monitor/agent-bridge.js" cursor postToolUse' }] },
+  }));
+  const results = inspect({ home, project });
+  assert.equal(results.projectIntegrations.cursor.agentMonitorHooks, true);
+  assert.equal(results.integrations.cursor.agentMonitorHooks, false);
+});
