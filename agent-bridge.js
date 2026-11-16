@@ -32,9 +32,9 @@ const EVENT_MAP = {
 function normalize(client, name, raw) {
   const event = EVENT_MAP[client] && EVENT_MAP[client][name];
   if (!event || !raw || typeof raw !== 'object' || Array.isArray(raw)) return null;
-  const cwd = raw.cwd || (Array.isArray(raw.workspace_roots) && raw.workspace_roots[0]) || process.cwd();
+  const cwd = (typeof raw.cwd === 'string' && raw.cwd) || (Array.isArray(raw.workspace_roots) && typeof raw.workspace_roots[0] === 'string' && raw.workspace_roots[0]) || process.cwd();
   const result = {
-    session_id: raw.session_id || raw.conversation_id || raw.thread_id || 'unknown',
+    session_id: [raw.session_id, raw.conversation_id, raw.thread_id].find(v => typeof v === 'string' && v) || 'unknown',
     cwd,
   };
   if (typeof raw.prompt === 'string') result.prompt = raw.prompt;
@@ -44,6 +44,13 @@ function normalize(client, name, raw) {
   if (typeof raw.tool_name === 'string') result.tool_name = raw.tool_name;
   if (raw.tool_input && typeof raw.tool_input === 'object') result.tool_input = raw.tool_input;
   if (typeof raw.tool_use_id === 'string') result.tool_use_id = raw.tool_use_id;
+  if (typeof raw.duration === 'number' && Number.isFinite(raw.duration)) result.duration_ms = raw.duration;
+  if (typeof raw.source === 'string') result.source = raw.source;
+  if (typeof raw.reason === 'string') result.reason = raw.reason;
+  if (typeof raw.subagent_type === 'string') result.subagent_type = raw.subagent_type;
+  if (typeof raw.task === 'string' && event === 'SubagentStart') result.prompt = raw.task;
+  if (typeof raw.error_message === 'string') result.message = raw.error_message.slice(0,300);
+  if (raw.status === 'error' || name === 'postToolUseFailure') result.is_error = true;
   // Only the minimal error/exit fields are forwarded, never a raw tool result.
   if (raw.tool_response && typeof raw.tool_response === 'object') {
     const response = raw.tool_response;
@@ -54,11 +61,11 @@ function normalize(client, name, raw) {
       if (Number.isInteger(response[key])) result.tool_response[key] = response[key];
     }
   }
-  if (raw.is_error === true || raw.isError === true) {
+  if (raw.is_error === true || raw.isError === true || result.is_error === true) {
     result.tool_response = { is_error: true };
   }
   if (typeof raw.message === 'string' && event === 'Notification') result.message = raw.message;
-  if (typeof raw.notification_type === 'string' && event === 'Notification') result.message = raw.notification_type;
+  if (typeof raw.notification_type === 'string' && event === 'Notification' && !result.message) result.message = raw.notification_type;
   if (typeof raw.agent_id === 'string') result.agent_id = raw.agent_id;
   if (typeof raw.subagent_id === 'string') result.subagent_id = raw.subagent_id;
   if (typeof raw.agent_type === 'string') result.agent_type = raw.agent_type;
@@ -73,7 +80,7 @@ function main(argv = process.argv.slice(2)) {
   try {
     if (!EVENT_MAP[client] || !EVENT_MAP[client][name]) return;
     const input = fs.readFileSync(0, 'utf8');
-    const value = JSON.parse(input || '{}');
+    const value = JSON.parse(input.replace(/^\uFEFF/, '') || '{}');
     const normalized = normalize(client, name, value);
     if (!normalized) return;
     spawnSync(process.execPath, [path.join(__dirname, 'hook.js'), normalized.event, '--client', client], {
@@ -86,13 +93,9 @@ function main(argv = process.argv.slice(2)) {
     // Monitoring must never interrupt an AI coding session.
   } finally {
     // Gemini CLI requires valid JSON stdout. Cursor accepts an empty object.
-    const response = client === 'cursor' && name === 'preToolUse'
-      ? { permission: 'allow' }
-      : client === 'cursor' && name === 'subagentStart'
-        ? { permission: 'allow' }
-        : client === 'cursor' && name === 'beforeSubmitPrompt'
-          ? { continue: true }
-          : {};
+    // Permission-sensitive Cursor hooks are NOT installed by default.
+    // Never emit an affirmative permission decision from a monitoring hook.
+    const response = client === 'cursor' && name === 'beforeSubmitPrompt' ? { continue: true } : {};
     process.stdout.write(JSON.stringify(response) + '\n');
   }
 }
