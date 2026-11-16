@@ -50,6 +50,7 @@ function adapterStatus(file, agent) {
 function inspect(options = {}) {
   const home = options.home || os.homedir();
   const repo = options.repo || __dirname;
+  const project = options.project || null;
   const data = process.env.AGENT_MONITOR_DATA || path.join(repo, 'data');
   const major = Number(process.versions.node.split('.')[0]);
   const eventFiles = fs.existsSync(data)
@@ -67,12 +68,23 @@ function inspect(options = {}) {
       cursor: adapterStatus(path.join(home, '.cursor', 'hooks.json'), 'cursor'),
       geminiCli: adapterStatus(path.join(home, '.gemini', 'settings.json'), 'gemini'),
     },
+    projectIntegrations: project ? {
+      claudeCode: hookStatus(path.join(project, '.claude', 'settings.local.json')),
+      codexCli: hookStatus(path.join(project, '.codex', 'hooks.json')),
+      cursor: adapterStatus(path.join(project, '.cursor', 'hooks.json'), 'cursor'),
+      geminiCli: adapterStatus(path.join(project, '.gemini', 'settings.json'), 'gemini'),
+    } : null,
     note: 'Configuration detection is not proof that the agent emits events. Test a fresh session before claiming support.',
   };
 }
 
 function main(argv = process.argv.slice(2)) {
-  const results = inspect();
+  const projectFlag = argv.indexOf('--project');
+  if (projectFlag >= 0 && (!argv[projectFlag + 1] || argv[projectFlag + 1].startsWith('--'))) {
+    console.error('Usage: node doctor.js [--json] [--project DIR]'); process.exitCode = 1; return;
+  }
+  const project = projectFlag >= 0 ? path.resolve(argv[projectFlag + 1]) : null;
+  const results = inspect({ project });
   if (argv.includes('--json')) {
     process.stdout.write(JSON.stringify(results, null, 2) + '\n');
   } else {
@@ -81,6 +93,15 @@ function main(argv = process.argv.slice(2)) {
     for (const [name, status] of Object.entries(results.integrations)) {
       process.stdout.write(name + ': ' + (status.agentMonitorHooks ? 'hooks configured' : 'hooks not detected') +
         (status.warning ? ' (' + status.warning + ')' : '') + '\n');
+    }
+    if (results.projectIntegrations) {
+      for (const [name, local] of Object.entries(results.projectIntegrations)) {
+        const global = results.integrations[name];
+        process.stdout.write(name + ' (project): ' + (local.agentMonitorHooks ? 'hooks configured' : 'hooks not detected') + '\n');
+        if (local.agentMonitorHooks && global && global.agentMonitorHooks) {
+          process.stdout.write('WARNING: ' + name + ' hooks exist at both project and global scope; duplicate events are possible.\n');
+        }
+      }
     }
     process.stdout.write('Event files: ' + results.telemetry.eventFileCount + '\n');
     process.stdout.write('Note: send a prompt in a new agent session to confirm real event delivery.\n');
