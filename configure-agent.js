@@ -6,8 +6,8 @@ const path = require('node:path');
 const os = require('node:os');
 
 const EVENT_SETS = {
-  cursor: ['sessionStart', 'sessionEnd', 'beforeSubmitPrompt', 'preToolUse',
-    'postToolUse', 'postToolUseFailure', 'subagentStart', 'subagentStop', 'stop'],
+  cursor: ['sessionStart', 'sessionEnd', 'beforeSubmitPrompt',
+    'postToolUse', 'postToolUseFailure', 'subagentStop', 'stop'],
   gemini: ['SessionStart', 'SessionEnd', 'BeforeAgent', 'AfterAgent',
     'BeforeTool', 'AfterTool', 'Notification'],
 };
@@ -72,6 +72,7 @@ function main(argv = process.argv.slice(2)) {
   let existing = {};
   try {
     if (fs.existsSync(dest)) existing = JSON.parse(fs.readFileSync(dest, 'utf8').replace(/^\uFEFF/, ''));
+    if (remove && !fs.existsSync(dest)) { console.log('Nothing to remove: ' + dest); return; }
     const updated = updateSettings(existing, agent, remove);
     if (!apply) {
       console.log('DRY RUN - no files changed. Destination: ' + dest);
