@@ -153,3 +153,29 @@ test('removal without prior settings does not create files', () => {
   assert.equal(out.status, 0);
   assert.equal(fs.existsSync(path.join(dir, '.cursor')), false);
 });
+
+test('Gemini ToolPermission reaches hook.js as PermissionRequest and not informational Notification', () => {
+  const wait = normalize('gemini', 'Notification', {
+    session_id: 'gemini-test', notification_type: 'ToolPermission', message: 'Action required'
+  });
+  assert.equal(wait.event, 'PermissionRequest');
+  assert.equal(wait.payload.message, 'Action required');
+  const info = normalize('gemini', 'Notification', {
+    session_id: 'gemini-test', notification_type: 'SessionEnd', message: 'Action required'
+  });
+  assert.equal(info.event, 'Notification');
+
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'am-gemini-wait-'));
+  const result = spawnSync(process.execPath, [path.join(__dirname, '..', 'agent-bridge.js'), 'gemini', 'Notification'], {
+    input: JSON.stringify({ session_id: 'gemini-test', cwd: dir,
+      notification_type: 'ToolPermission', message: 'Action required' }),
+    env: { ...process.env, AGENT_MONITOR_DATA: dir }, encoding: 'utf8'
+  });
+  assert.equal(result.status, 0);
+  assert.deepEqual(JSON.parse(result.stdout), {});
+  const eventFile = fs.readdirSync(dir).find(name => /^events-.*\.jsonl$/.test(name));
+  assert.ok(eventFile);
+  const record = JSON.parse(fs.readFileSync(path.join(dir, eventFile), 'utf8'));
+  assert.equal(record.event, 'PermissionRequest');
+  assert.equal(record.message, 'Action required');
+});
