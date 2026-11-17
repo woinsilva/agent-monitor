@@ -35,3 +35,8 @@ test('limit UI is scoped by selected client and distinguishes windows', () => {
   assert.match(html, /weekly/);
   assert.match(html, /sevenDay/);
 });
+
+test('audit card counts distinct incomplete sessions and excludes live sessions', () => {
+  assert.match(html, /incomplete\.sessionCount/);
+  assert.doesNotMatch(html, /\$\{incomplete\.events\.length\}.*r_incomplete/);
+});

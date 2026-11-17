@@ -719,7 +719,8 @@
     const costSeries = [{ label: t('r_cost'), color: 'var(--c-codex)', value: d => d.estimatedCost || 0 }];
     const cost = r.pricesConfigured ? `<div class="rcard"><h3>${esc(t('r_cost_trend'))}</h3>${barChart(r.days, costSeries, { fmt: v => money(v), label: t('r_cost_trend'), minMax: .01 })}</div>` : '';
     const cards = findings.length ? findings.map(f => `<div class="health-item" role="listitem"><b>${esc(f.type.replaceAll('_', ' '))}</b><span class="tag">${esc(t('r_confidence', { level: f.confidence }))}</span><div>${esc(f.project)} · ${esc(f.sample || '')}</div>${f.probableCause ? `<div class="sub">${esc(f.probableCause)}</div>` : ''}<div>${esc(f.recommendation)}</div><div class="sub">${esc(t('r_evidence', { count: f.evidence.count }))} · ${esc(t('r_no_autofix'))}</div></div>`).join('') : `<div class="sub">${esc(t('r_health_none'))}</div>`;
-    return `<div class="rcols intelligence"><div class="rcard ${cost ? '' : 'wide'}"><h3>${esc(t('r_health'))}</h3><div class="health-list" role="list">${cards}</div></div>${cost}<div class="rcard wide"><h3>${esc(t('r_audit'))}</h3><p>${incomplete.events.length} ${esc(t('r_incomplete'))}. <a class="btn" href="/api/export?days=${reportDays}&incomplete=1" download>${esc(t('r_export'))}</a></p></div></div>`;
+    const incompleteSessions = Number(incomplete.sessionCount) || 0;
+    return `<div class="rcols intelligence"><div class="rcard ${cost ? '' : 'wide'}"><h3>${esc(t('r_health'))}</h3><div class="health-list" role="list">${cards}</div></div>${cost}<div class="rcard wide"><h3>${esc(t('r_audit'))}</h3><p>${incompleteSessions} ${esc(t('r_incomplete'))}. <a class="btn" href="/api/export?days=${reportDays}&incomplete=1" download>${esc(t('r_export'))}</a></p></div></div>`;
   }
 
   // one tooltip for every chart mark

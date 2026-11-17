@@ -23,7 +23,8 @@ function targetPath(agent, root, global) {
 
 function commandFor(agent, event, repo = __dirname) {
   const script = path.join(repo, 'agent-bridge.js').replace(/\\/g, '/');
-  return 'node "' + script + '" ' + agent + ' ' + event;
+  const runtime = process.execPath.replace(/\\/g, '/');
+  return '"' + runtime + '" "' + script + '" ' + agent + ' ' + event;
 }
 
 function ours(value) {
@@ -74,9 +75,11 @@ function main(argv = process.argv.slice(2)) {
   if (!global && !project) { console.error('Specify --global or --project DIR.'); process.exitCode = 1; return; }
   if (project && !fs.existsSync(project)) { console.error('Project directory not found.'); process.exitCode = 1; return; }
   const dest = targetPath(agent, global ? os.homedir() : path.resolve(project), global);
+  const createdMarker = dest + '.created-by-agent-monitor';
   let existing = {};
   try {
-    if (fs.existsSync(dest)) existing = JSON.parse(fs.readFileSync(dest, 'utf8').replace(/^\uFEFF/, ''));
+    const existed = fs.existsSync(dest);
+    if (existed) existing = JSON.parse(fs.readFileSync(dest, 'utf8').replace(/^\uFEFF/, ''));
     if (remove && !fs.existsSync(dest)) { console.log('Nothing to remove: ' + dest); return; }
     const updated = updateSettings(existing, agent, remove);
     if (!apply) {
@@ -86,12 +89,21 @@ function main(argv = process.argv.slice(2)) {
       return;
     }
     if (!remove && !fs.existsSync(path.join(__dirname, 'agent-bridge.js'))) throw new Error('Missing agent-bridge.js');
-    if (fs.existsSync(dest)) {
+    if (existed) {
       const backup = dest + '.bak-agent-monitor';
-      if (!fs.existsSync(backup)) fs.copyFileSync(dest, backup);
+      fs.copyFileSync(dest, backup);
     }
     fs.mkdirSync(path.dirname(dest), { recursive: true });
-    fs.writeFileSync(dest, JSON.stringify(updated, null, 2) + '\n');
+    if (remove && fs.existsSync(createdMarker) && generatedOnly(updated)) {
+      fs.unlinkSync(dest);
+      fs.unlinkSync(createdMarker);
+    } else {
+      const temporary = dest + '.tmp-' + process.pid;
+      fs.writeFileSync(temporary, JSON.stringify(updated, null, 2) + '\n');
+      fs.renameSync(temporary, dest);
+      if (!remove && !existed) fs.writeFileSync(createdMarker, 'created by Agent Monitor\n');
+      if (remove && fs.existsSync(createdMarker)) fs.unlinkSync(createdMarker);
+    }
     console.log((remove ? 'Removed Agent Monitor hooks from ' : 'Installed Agent Monitor hooks in ') + dest);
     console.log('Restart the agent and verify that it delivers events; hooks present does not mean tested compatibility.');
   } catch (e) {
@@ -99,5 +111,10 @@ function main(argv = process.argv.slice(2)) {
     process.exitCode = 1;
   }
 }
+function generatedOnly(settings) {
+  const copy = JSON.parse(JSON.stringify(settings || {}));
+  if (copy.version === 1) delete copy.version;
+  return Object.keys(copy).length === 0;
+}
 if (require.main === module) main();
-module.exports = { EVENT_SETS, targetPath, commandFor, ours, updateSettings, main };
+module.exports = { EVENT_SETS, targetPath, commandFor, ours, updateSettings, generatedOnly, main };

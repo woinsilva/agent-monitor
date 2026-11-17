@@ -188,9 +188,15 @@ function refreshCurrent(s) {
 
 function canonicalEvent(ev) {
   if (ev.client !== 'gemini' || !ev.session) return ev;
+  for (const [alias, value] of sessionAliases) {
+    if (value && typeof value === 'object' && value.expiresAt < ev.ts) sessionAliases.delete(alias);
+  }
   const incomingKey = keyOf(ev, false);
   const known = sessionAliases.get(incomingKey);
-  if (known) return Object.assign({}, ev, { session: known });
+  if (known) {
+    if (ev.event === 'SessionStart') { sessionAliases.delete(incomingKey); return ev; }
+    return Object.assign({}, ev, { session: typeof known === 'string' ? known : known.session });
+  }
 
   // Gemini CLI headless can emit BeforeAgent under the requested --session-id,
   // then AfterAgent/SessionEnd under a generated runtime id. The same prompt is
@@ -202,12 +208,16 @@ function canonicalEvent(ev) {
     !s.parentKey && s.client === 'gemini' && s.status === 'working' &&
     slashes(s.cwd || '').toLowerCase() === cwd && s.prompt === ev.prompt);
   if (matches.length !== 1) return ev;
-  sessionAliases.set(incomingKey, matches[0].session);
+  sessionAliases.set(incomingKey, { session: matches[0].session, expiresAt: ev.ts + STALE_MS });
   return Object.assign({}, ev, { session: matches[0].session });
 }
 
 function applyEvent(ev) {
-  if (!validateEvent(ev).ok) return;
+  const validation = validateEvent(ev);
+  if (!validation.ok) {
+    if (process.env.AGENT_MONITOR_DEBUG === '1') console.error('[agent-monitor] rejected event: ' + validation.errors.join(', '));
+    return;
+  }
   ev = canonicalEvent(ev);
 
   // Cursor invokes Claude-compatible hooks as well as its native hooks. Both
@@ -708,6 +718,7 @@ const server = http.createServer((req, res) => {
   if (url.pathname === '/api/replay') {
     const days = Math.max(1, Math.min(31, Number(url.searchParams.get('days')) || 7));
     const body = audit.replay({ dataDir: DATA_DIR, days, client: url.searchParams.get('client') || null, project: url.searchParams.get('project') || null, incomplete: url.searchParams.get('incomplete') === '1' });
+    if (body.filters.incomplete) body.sessionCount = audit.countIncompleteSessions(body.events, snapshot().sessions);
     res.writeHead(200, { 'Content-Type': 'application/json; charset=utf-8', 'Cache-Control': 'no-store' });
     return res.end(JSON.stringify(body));
   }

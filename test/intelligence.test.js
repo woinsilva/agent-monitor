@@ -46,3 +46,24 @@ test('audit replay filters incomplete sessions and aggregate export removes priv
   assert.equal(JSON.stringify(exported).includes('request'), false);
   assert.match(exported.privacy, /Aggregated metadata/);
 });
+
+test('unrelated or interrupted tool failures are not called consecutive', () => {
+  const events = [
+    base('PostToolUseFailure', { ts: NOW - 6, tool: 'Bash', summary: 'grep found nothing', failed: true }),
+    base('PostToolUseFailure', { ts: NOW - 5, tool: 'Bash', summary: 'npm test failed', failed: true }),
+    base('PostToolUse', { ts: NOW - 4, tool: 'Bash', summary: 'command succeeded' }),
+    base('PostToolUseFailure', { ts: NOW - 3, tool: 'Bash', summary: 'npm test failed', failed: true }),
+  ];
+  const result = intelligence.analyze({ dataDir: fixture(events), now: NOW, days: 1 });
+  assert.equal(result.findings.some(f => f.type === 'consecutive_failure'), false);
+});
+
+test('incomplete session count ignores live parents and never lets children hide stale parents', () => {
+  const events = [{ client: 'codex', session: 'stale-parent' }, { client: 'codex', session: 'live-parent' }];
+  const live = [
+    { client: 'codex', session: 'stale-parent', status: 'stale', parentKey: null },
+    { client: 'codex', session: 'stale-parent', status: 'done', parentKey: 'codex:stale-parent' },
+    { client: 'codex', session: 'live-parent', status: 'working', parentKey: null },
+  ];
+  assert.equal(audit.countIncompleteSessions(events, live), 1);
+});

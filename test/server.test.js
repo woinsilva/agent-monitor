@@ -127,6 +127,32 @@ test('Gemini headless events with a generated runtime id join the requested sess
   assert.equal(get('gemini:generated'), undefined);
 });
 
+test('Gemini runtime aliases are released when the canonical session ends', () => {
+  ev({ client: 'gemini', session: 'requested', event: 'UserPromptSubmit', cwd: '/repo', prompt: 'hello' });
+  ev({ client: 'gemini', session: 'generated', event: 'Stop', cwd: '/repo', prompt: 'hello' });
+  ev({ client: 'gemini', session: 'generated', event: 'SessionEnd', cwd: '/repo' });
+  ev({ client: 'gemini', session: 'generated', event: 'SessionStart', cwd: '/other' });
+  assert.ok(get('gemini:generated'));
+  assert.equal(get('gemini:requested').status, 'ended');
+});
+
+test('duplicate Gemini runtime SessionEnd remains correlated until a new start', () => {
+  ev({ client: 'gemini', session: 'requested', event: 'UserPromptSubmit', cwd: '/repo', prompt: 'hello' });
+  ev({ client: 'gemini', session: 'generated', event: 'Stop', cwd: '/repo', prompt: 'hello' });
+  ev({ client: 'gemini', session: 'generated', event: 'SessionEnd', cwd: '/repo' });
+  ev({ client: 'gemini', session: 'generated', event: 'SessionEnd', cwd: '/repo' });
+  assert.equal(get('gemini:generated'), undefined);
+  assert.equal(get('gemini:requested').timeline.filter(item => item.event === 'SessionEnd').length, 1);
+});
+
+test('expired Gemini runtime aliases are pruned lazily on later events', () => {
+  ev({ client: 'gemini', session: 'requested', event: 'UserPromptSubmit', cwd: '/repo', prompt: 'hello' });
+  ev({ client: 'gemini', session: 'generated', event: 'Stop', cwd: '/repo', prompt: 'hello' });
+  clock += 21 * 60 * 1000;
+  ev({ client: 'gemini', session: 'generated', event: 'SessionEnd', cwd: '/repo' });
+  assert.ok(get('gemini:generated'));
+});
+
 test('Gemini correlation does not guess between concurrent identical prompts', () => {
   ev({ client: 'gemini', session: 'one', event: 'UserPromptSubmit', cwd: '/repo', prompt: 'same' });
   ev({ client: 'gemini', session: 'two', event: 'UserPromptSubmit', cwd: '/repo', prompt: 'same' });

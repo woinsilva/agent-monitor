@@ -179,12 +179,50 @@ test('Cursor BOM input is processed and non-string ids are rejected', () => {
   assert.equal(normalize('cursor','stop',{ conversation_id: { secret: 1 }, cwd: 42 }).payload.session_id,'unknown');
 });
 
+test('hook coerces numeric runtime session ids to schema-safe strings', () => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'am-numeric-session-'));
+  const out = spawnSync(process.execPath, [path.join(__dirname, '..', 'hook.js'), 'SessionStart', '--client', 'claude'], {
+    input: JSON.stringify({ session_id: 12345, cwd: dir }),
+    env: { ...process.env, AGENT_MONITOR_DATA: dir }, encoding: 'utf8',
+  });
+  assert.equal(out.status, 0);
+  const file = fs.readdirSync(dir).find(name => /^events-.*\.jsonl$/.test(name));
+  assert.equal(JSON.parse(fs.readFileSync(path.join(dir, file), 'utf8')).session, '12345');
+});
+
 test('removal without prior settings does not create files', () => {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'am-remove-'));
   const out = spawnSync(process.execPath, [path.join(__dirname, '..', 'configure-agent.js'),
     '--agent', 'cursor', '--project', dir, '--remove'], { encoding: 'utf8' });
   assert.equal(out.status, 0);
   assert.equal(fs.existsSync(path.join(dir, '.cursor')), false);
+});
+
+test('installer writes atomically, refreshes backup and removes files it created', () => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'am-install-cycle-'));
+  const script = path.join(__dirname, '..', 'configure-agent.js');
+  const args = ['--agent', 'cursor', '--project', dir];
+  assert.equal(spawnSync(process.execPath, [script, ...args, '--apply'], { encoding: 'utf8' }).status, 0);
+  const dest = path.join(dir, '.cursor', 'hooks.json');
+  assert.equal(fs.existsSync(dest), true);
+  assert.equal(fs.readdirSync(path.dirname(dest)).some(name => name.includes('.tmp-')), false);
+  assert.equal(spawnSync(process.execPath, [script, ...args, '--remove'], { encoding: 'utf8' }).status, 0);
+  assert.equal(fs.existsSync(dest), false);
+  assert.equal(fs.existsSync(dest + '.created-by-agent-monitor'), false);
+});
+
+test('uninstall preserves user settings added after Agent Monitor created the file', () => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'am-install-user-edit-'));
+  const script = path.join(__dirname, '..', 'configure-agent.js');
+  const args = ['--agent', 'gemini', '--project', dir];
+  assert.equal(spawnSync(process.execPath, [script, ...args, '--apply'], { encoding: 'utf8' }).status, 0);
+  const dest = path.join(dir, '.gemini', 'settings.json');
+  const settings = JSON.parse(fs.readFileSync(dest, 'utf8'));
+  settings.theme = 'dark';
+  fs.writeFileSync(dest, JSON.stringify(settings));
+  assert.equal(spawnSync(process.execPath, [script, ...args, '--remove'], { encoding: 'utf8' }).status, 0);
+  assert.equal(JSON.parse(fs.readFileSync(dest, 'utf8')).theme, 'dark');
+  assert.equal(fs.existsSync(dest + '.created-by-agent-monitor'), false);
 });
 
 test('Gemini ToolPermission reaches hook.js as PermissionRequest and not informational Notification', () => {

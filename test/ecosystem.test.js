@@ -15,6 +15,8 @@ test('Copilot documented camelCase lifecycle and tool payloads normalize safely'
   assert.equal(tool.payload.tool_name, 'bash');
   assert.deepEqual(tool.payload.tool_input, { command: 'npm test' });
   assert.equal(fail.payload.is_error, true);
+  const stringArgs = normalize('copilot', 'postToolUse', { sessionId: 'copilot-1', toolName: 'bash', toolArgs: '{"command":"npm test"}' });
+  assert.deepEqual(stringArgs.payload.tool_input, { command: 'npm test' });
 });
 
 test('Copilot installer preserves existing hooks and uses official project location', () => {
@@ -22,6 +24,7 @@ test('Copilot installer preserves existing hooks and uses official project locat
   const next = configure.updateSettings(existing, 'copilot', false, 'C:/agent-monitor');
   assert.equal(next.hooks.sessionStart[0].command, 'keep-me');
   assert.match(next.hooks.sessionStart[1].command, /agent-bridge\.js" copilot sessionStart/);
+  assert.equal(next.hooks.sessionStart[1].command.includes(process.execPath.replace(/\\/g, '/')), true);
   assert.match(configure.targetPath('copilot', 'C:/repo', false).replace(/\\/g, '/'), /\.github\/hooks\/agent-monitor\.json$/);
 });
 

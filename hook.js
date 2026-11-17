@@ -160,7 +160,7 @@ function main() {
     ts: Date.now(),
     client: client,
     event: event || data.hook_event_name || 'unknown',
-    session: data.session_id || data.conversation_id || data.thread_id || 'unknown',
+    session: String(data.session_id || data.conversation_id || data.thread_id || 'unknown').slice(0, 256),
     cwd: data.cwd || process.cwd(),
   });
   const agentId = data.agent_id || data.subagent_id || null;

@@ -7,7 +7,7 @@ Agent Health, estimativas de custo, replay/export local ou SDK.
 | Capacidade | Free (MIT) | Pro |
 |---|---:|---:|
 | Dashboard local, hooks e notificações | sim | sim |
-| Cursor/Gemini preview e SDK externo | sim | sim |
+| Cursor/Gemini/Copilot/OpenCode preview, Aider wrapper e SDK externo | sim | sim |
 | Agent Health, custo estimado, replay e export agregado | sim | sim |
 | Auditoria operacional em lote/CI com política e exit code | — | sim |
 | Baseline assinado e comparação entre execuções | — | sim |
