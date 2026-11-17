@@ -10,9 +10,9 @@ function usage() {
   return [
     'Usage:',
     '  node agent-monitor.js doctor [--project DIR] [--json]',
-    '  node agent-monitor.js install --agent core|cursor|gemini (--global|--project DIR) [--apply]',
-    '  node agent-monitor.js uninstall --agent core|cursor|gemini (--global|--project DIR) --apply',
-    '  node agent-monitor.js verify --agent claude|codex|cursor|gemini [--project DIR]',
+    '  node agent-monitor.js install --agent core|cursor|gemini|copilot (--global|--project DIR) [--apply]',
+    '  node agent-monitor.js uninstall --agent core|cursor|gemini|copilot (--global|--project DIR) --apply',
+    '  node agent-monitor.js verify --agent claude|codex|cursor|gemini|copilot|opencode|aider [--project DIR]',
     '',
     'core configures Claude Code and Codex together. Existing files are backed up once.',
   ].join('\n');
@@ -31,7 +31,7 @@ function main(argv = process.argv.slice(2), options = {}) {
   const at = args.indexOf('--agent');
   const agent = at >= 0 ? args[at + 1] : null;
   if (action === 'verify') {
-    if (!['claude', 'codex', 'cursor', 'gemini'].includes(agent)) { console.error(usage()); return 1; }
+    if (!['claude', 'codex', 'cursor', 'gemini', 'copilot', 'opencode', 'aider'].includes(agent)) { console.error(usage()); return 1; }
     const projectArg = valueAfter(args, '--project');
     const inspect = options.inspect || require('./doctor').inspect;
     const result = inspect({ project: projectArg ? path.resolve(projectArg) : null });
@@ -39,7 +39,7 @@ function main(argv = process.argv.slice(2), options = {}) {
     console.log(delivered ? agent + ': delivery seen at ' + new Date(delivered).toISOString() : agent + ': no delivery in the last 7 days');
     return delivered ? 0 : 2;
   }
-  if (!['install', 'uninstall'].includes(action) || !['core', 'cursor', 'gemini'].includes(agent)) {
+  if (!['install', 'uninstall'].includes(action) || !['core', 'cursor', 'gemini', 'copilot'].includes(agent)) {
     console.error(usage()); return 1;
   }
   if (args.includes('--remove')) {

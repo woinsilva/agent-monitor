@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 'use strict';
-// Opt-in installation for Cursor / Gemini CLI. Default is DRY RUN.
+// Opt-in installation for supported external CLIs. Default is DRY RUN.
 const fs = require('node:fs');
 const path = require('node:path');
 const os = require('node:os');
@@ -10,9 +10,13 @@ const EVENT_SETS = {
     'postToolUse', 'postToolUseFailure', 'subagentStop', 'stop'],
   gemini: ['SessionStart', 'SessionEnd', 'BeforeAgent', 'AfterAgent',
     'BeforeTool', 'AfterTool', 'Notification'],
+  copilot: ['sessionStart', 'sessionEnd', 'userPromptSubmitted', 'preToolUse',
+    'postToolUse', 'postToolUseFailure', 'agentStop', 'subagentStart', 'subagentStop',
+    'permissionRequest', 'notification', 'errorOccurred'],
 };
 
 function targetPath(agent, root, global) {
+  if (agent === 'copilot') return global ? path.join(root, '.copilot', 'settings.json') : path.join(root, '.github', 'hooks', 'agent-monitor.json');
   const folder = agent === 'cursor' ? '.cursor' : '.gemini';
   return path.join(root, folder, agent === 'cursor' ? 'hooks.json' : 'settings.json');
 }
@@ -24,7 +28,7 @@ function commandFor(agent, event, repo = __dirname) {
 
 function ours(value) {
   return !!value && typeof value.command === 'string' &&
-    value.command.includes('/agent-bridge.js"') && / (cursor|gemini) \w+$/.test(value.command);
+    value.command.includes('/agent-bridge.js"') && / (cursor|gemini|copilot) \w+$/.test(value.command);
 }
 
 function updateSettings(settings, agent, remove, repo = __dirname) {
@@ -33,7 +37,7 @@ function updateSettings(settings, agent, remove, repo = __dirname) {
   for (const [event, entries] of Object.entries(next.hooks)) {
     if (!Array.isArray(entries)) continue;
     next.hooks[event] = entries.filter(entry => {
-      if (agent === 'cursor') return !ours(entry);
+      if (agent === 'cursor' || agent === 'copilot') return !ours(entry);
       if (!entry || !Array.isArray(entry.hooks)) return true;
       entry.hooks = entry.hooks.filter(hook => !ours(hook));
       return entry.hooks.length > 0;
@@ -41,11 +45,12 @@ function updateSettings(settings, agent, remove, repo = __dirname) {
     if (next.hooks[event].length === 0) delete next.hooks[event];
   }
   if (!remove) {
-    if (agent === 'cursor') next.version = next.version || 1;
+    if (agent === 'cursor' || agent === 'copilot') next.version = next.version || 1;
     for (const event of EVENT_SETS[agent]) {
       next.hooks[event] = next.hooks[event] || [];
       const command = commandFor(agent, event, repo);
       if (agent === 'cursor') next.hooks[event].push({ command });
+      else if (agent === 'copilot') next.hooks[event].push({ type: 'command', command });
       else next.hooks[event].push({ matcher: '', hooks: [{ name: 'agent-monitor-' + event, type: 'command', command }] });
     }
   }
@@ -57,7 +62,7 @@ function main(argv = process.argv.slice(2)) {
   const idx = argv.indexOf('--agent');
   const agent = idx < 0 ? null : argv[idx + 1];
   if (!EVENT_SETS[agent]) {
-    console.error('Usage: node configure-agent.js --agent cursor|gemini [--global|--project DIR] [--apply|--remove]');
+    console.error('Usage: node configure-agent.js --agent cursor|gemini|copilot [--global|--project DIR] [--apply|--remove]');
     process.exitCode = 1; return;
   }
   const projectIndex = argv.indexOf('--project');

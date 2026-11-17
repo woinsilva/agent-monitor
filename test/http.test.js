@@ -42,8 +42,9 @@ test('HTTP API, static files and SSE expose the same current state', async t => 
   assert.equal(health.status, 200);
   assert.equal(JSON.parse(health.body).eventCount, 2);
   const replay = await request(port, '/api/replay?days=1&client=cursor&incomplete=1');
-  assert.equal(JSON.parse(replay.body).events.length, 2);
-  assert.equal(replay.body.includes('private'), false);
+  const replayEvents = JSON.parse(replay.body).events;
+  assert.equal(replayEvents.length, 2);
+  assert.equal(replayEvents.every(event => !('prompt' in event) && !('summary' in event) && !('reply' in event)), true);
   const exported = await request(port, '/api/export?days=1');
   assert.match(exported.headers['content-disposition'], /attachment/);
   assert.match(JSON.parse(exported.body).privacy, /Aggregated metadata/);

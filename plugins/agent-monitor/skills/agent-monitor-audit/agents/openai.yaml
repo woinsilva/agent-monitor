@@ -1,0 +1,4 @@
+interface:
+  display_name: "Agent Monitor Audit"
+  short_description: "Inspect local Agent Monitor health and audit data"
+  default_prompt: "Inspect the local Agent Monitor and summarize health, delivery, and privacy-safe audit results."

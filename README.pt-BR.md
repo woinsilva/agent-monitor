@@ -117,6 +117,9 @@ acidentais. Os instaladores antigos continuam disponíveis para compatibilidade.
 | Codex CLI | suportado | hooks de projeto ou globais |
 | Cursor | preview | lifecycle e ferramentas; hooks decisórios não são instalados |
 | Gemini CLI | preview | lifecycle, ferramentas e pedido de permissão; confirmação real de permitir/negar ainda pendente |
+| GitHub Copilot CLI | preview | hooks de projeto e entrega real validados no Windows |
+| OpenCode | preview | plugin V2 local; lifecycle real validado |
+| Aider | wrapper | wrapper local, pois não há hooks lifecycle estáveis |
 | outros | SDK/`report.js` | integração explícita pelo emissor local |
 
 ### Deixar sempre no ar com Docker

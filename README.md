@@ -353,17 +353,23 @@ versioned adapters and sanitized fixtures. Cursor lifecycle/tool delivery was
 verified on Windows; Gemini permission allow/deny/cancel remains deferred after
 an upstream 503. Support depends on runtime telemetry, not model names.
 
+GitHub Copilot CLI 1.0.112, OpenCode 2.3.0 and Aider 0.86.2 also have opt-in
+preview adapters. Copilot uses documented project hooks, OpenCode uses the local
+V2 plugin in `integrations/opencode`, and Aider uses `integrations/aider.js`
+because Aider does not expose stable lifecycle hooks.
+
 Inspect the installation without changing anything:
 
 ```sh
 node agent-monitor.js doctor --json
 ```
 
-For Cursor and Gemini CLI, review the proposed configuration in dry-run mode:
+For Cursor, Gemini CLI and Copilot, review the proposed configuration in dry-run mode:
 
 ```sh
 node agent-monitor.js install --agent cursor --project /path/to/project
 node agent-monitor.js install --agent gemini --project /path/to/project
+node agent-monitor.js install --agent copilot --project /path/to/project
 ```
 
 After checking the configuration changes and confirming permission:

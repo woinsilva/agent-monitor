@@ -42,19 +42,19 @@ Estados: `todo`, `doing`, `blocked`, `done`.
 
 | ID | Estado | Tarefa | Dependências | Critério de aceite |
 |---|---|---|---|---|
-| P3-01 | todo | Definir matriz Free/Pro e proposta comercial | P2-01..04 | recursos pagos têm valor e não removem direitos MIT existentes |
-| P3-02 | todo | Projetar licença, ativação e atualização Pro | P3-01 | fluxo offline/online, privacidade, suporte e threat model |
-| P3-03 | todo | Implementar aplicativo Pro | P3-02 | pacote, ativação e recursos premium testados |
-| P3-04 | todo | Adaptador GitHub Copilot | P1-01..03 | versão/OS/capacidades e teste real documentados |
-| P3-05 | todo | Adaptador OpenCode | P1-01..03 | versão/OS/capacidades e teste real documentados |
-| P3-06 | todo | Adaptador Aider | P1-01..03 | versão/OS/capacidades e teste real documentados |
-| P3-07 | todo | Avaliar plugin Codex/ChatGPT Work | P1-01, P2-05 | apenas superfícies oficiais, scripts locais e confiança explícita |
+| P3-01 | done | Definir matriz Free/Pro e proposta comercial | P2-01..04 | recursos pagos têm valor e não removem direitos MIT existentes |
+| P3-02 | done | Projetar licença, ativação e atualização Pro | P3-01 | fluxo offline/online, privacidade, suporte e threat model |
+| P3-03 | done | Implementar aplicativo Pro | P3-02 | pacote, ativação e recursos premium testados |
+| P3-04 | done | Adaptador GitHub Copilot | P1-01..03 | versão/OS/capacidades e teste real documentados |
+| P3-05 | done | Adaptador OpenCode | P1-01..03 | versão/OS/capacidades e teste real documentados |
+| P3-06 | done | Adaptador Aider | P1-01..03 | versão/OS/capacidades e teste real documentados |
+| P3-07 | done | Avaliar plugin Codex/ChatGPT Work | P1-01, P2-05 | apenas superfícies oficiais, scripts locais e confiança explícita |
 
 ## Fase 4 — skills Agensi
 
 | ID | Estado | Tarefa | Dependências | Critério de aceite |
 |---|---|---|---|---|
-| A-01 | todo | Versionar fontes Free/Pro em repositório privado | nenhuma | build reproduzível dos ZIPs exatos |
+| A-01 | done | Versionar fontes Free/Pro em repositório privado | nenhuma | build reproduzível dos ZIPs exatos |
 | A-02 | todo | Revalidar Free no release 1.0 | P1-08, A-01 | comandos e compatibilidade correspondem ao release |
 | A-03 | todo | Revalidar auditor Pro | P0-01, P1-01, A-01 | testes e métricas refletem schema final |
 | A-04 | todo | Preparar listing, preço, pagamentos e suporte | A-02, A-03 | revisão humana concluída, sem publicação automática |

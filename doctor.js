@@ -66,7 +66,7 @@ function hookStatus(file) {
 function commandIsOurs(command) {
   return typeof command === 'string' &&
     command.replace(/\\/g, '/').includes('/agent-bridge.js"') &&
-    / (cursor|gemini) [A-Za-z]+$/.test(command);
+    / (cursor|gemini|copilot) [A-Za-z]+$/.test(command);
 }
 
 function adapterStatus(file, agent) {
@@ -77,7 +77,7 @@ function adapterStatus(file, agent) {
     for (const entries of Object.values(config.hooks || {})) {
       if (!Array.isArray(entries)) continue;
       for (const entry of entries) {
-        if (agent === 'cursor' && commandIsOurs(entry && entry.command)) found = true;
+        if ((agent === 'cursor' || agent === 'copilot') && commandIsOurs(entry && entry.command)) found = true;
         if (agent === 'gemini' && entry && Array.isArray(entry.hooks) &&
           entry.hooks.some(h => commandIsOurs(h.command))) found = true;
       }
@@ -108,6 +108,9 @@ function inspect(options = {}) {
       codexCli: binaryStatus('codex', options),
       cursor: binaryStatus('cursor', options),
       geminiCli: binaryStatus('gemini', options),
+      githubCopilot: binaryStatus('copilot', options),
+      openCode: binaryStatus('opencode', options),
+      aider: binaryStatus('aider', options),
     },
     telemetry: {
       eventFileCount: eventFiles.length,
@@ -119,12 +122,16 @@ function inspect(options = {}) {
       codexCli: hookStatus(path.join(home, '.codex', 'hooks.json')),
       cursor: adapterStatus(path.join(home, '.cursor', 'hooks.json'), 'cursor'),
       geminiCli: adapterStatus(path.join(home, '.gemini', 'settings.json'), 'gemini'),
+      githubCopilot: adapterStatus(path.join(home, '.copilot', 'settings.json'), 'copilot'),
+      openCode: { configPresent: false, agentMonitorHooks: false, note: 'Install the local plugin explicitly per docs/COMPATIBILITY.md' },
+      aider: { configPresent: fs.existsSync(path.join(repo, 'integrations', 'aider.js')), agentMonitorHooks: false, note: 'Use integrations/aider.js as the Aider wrapper' },
     },
     projectIntegrations: project ? {
       claudeCode: hookStatus(path.join(project, '.claude', 'settings.local.json')),
       codexCli: hookStatus(path.join(project, '.codex', 'hooks.json')),
       cursor: adapterStatus(path.join(project, '.cursor', 'hooks.json'), 'cursor'),
       geminiCli: adapterStatus(path.join(project, '.gemini', 'settings.json'), 'gemini'),
+      githubCopilot: adapterStatus(path.join(project, '.github', 'hooks', 'agent-monitor.json'), 'copilot'),
     } : null,
     note: 'Configuration detection is not proof that the agent emits events. Test a fresh session before claiming support.',
   };

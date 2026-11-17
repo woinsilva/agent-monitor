@@ -11,7 +11,25 @@ capabilities or test scenarios are still missing.
 | Codex CLI | 0.154.0 / Windows | supported baseline | yes | start/result | yes | yes | rollout tokens + 5h/7d limits | global hooks remain experimental |
 | Cursor | 3.30.14 / Windows x64 | preview | yes; real UI run verified 2026-11-17 | result/failure; real `Read` result verified | unavailable | stop only | unavailable | permission-sensitive hooks are deliberately not installed; Claude-compatible duplicates are suppressed; Stop does not include the assistant reply |
 | Gemini CLI | 0.68.0 / Windows x64 | preview | real SessionStart/prompt verified; server correlation covers headless ID variant | start/result | documented `ToolPermission` mapping; real allow/deny pending | unavailable | unavailable | 2026-11-17 permission run was blocked by upstream 503; cancelling during API retry emitted no SessionEnd and remains working until stale timeout |
+| GitHub Copilot CLI | 1.0.112 / Windows x64 | preview | real prompt-mode lifecycle verified | documented start/result/failure hooks | observed only, never decided | documented hooks | unavailable | project hooks live in `.github/hooks`; real no-tool run returned `OK` and delivery was verified |
+| OpenCode | 2.3.0 / Windows x64 | preview | real prompt lifecycle verified | SDK before/after hooks | unavailable | unavailable | unavailable | local V2 plugin loaded and delivered; Nvidia model provider did not finish before the controlled timeout |
+| Aider | 0.86.2 / Windows x64 | wrapper | wrapper start/stop/end verified | unavailable through stable public hooks | unavailable | unavailable | model-dependent | official scripting has no stable lifecycle hooks; use `integrations/aider.js` |
 | Other agents | any runtime using `report.js` | manual | caller supplied | caller supplied | caller supplied | caller supplied | caller supplied | reliability depends on the reporter |
+
+## Opt-in setup for ecosystem previews
+
+- Copilot: preview with `node agent-monitor.js install --agent copilot --project
+  C:\path\to\project`, then apply with `--apply`, restart Copilot, and run
+  `verify --agent copilot --project C:\path\to\project`.
+- OpenCode: install dependencies with `npm install` in `integrations/opencode`,
+  then create `.opencode/plugins/agent-monitor.ts` in the target project that
+  re-exports the absolute `integrations/opencode/index.ts` file. Restart OpenCode
+  and verify with `--agent opencode`.
+- Aider: invoke Aider through `node integrations/aider.js -- <aider arguments>`.
+  Set `AIDER_BINARY` when `aider` is not on PATH, then verify with `--agent aider`.
+
+All three are opt-in. Installation/configuration is not evidence of delivery;
+use the matching `verify` command after a fresh session.
 
 ## Golden fixtures
 
@@ -42,4 +60,10 @@ An integration moves from preview to supported only after:
 - Browser smoke coverage verified Office/Panel, client filters, historical-session
   toggle, timeline, and live Cursor/Gemini visibility. Codex limit cards were not
   expected in that run because `/api/state` reported `codexLimits: null`.
+- Copilot returned `OK` in a real no-tool prompt and `verify` found fresh delivery.
+- OpenCode loaded the local V2 plugin and delivered `UserPromptSubmit`; two Nvidia
+  model calls were cancelled after controlled timeouts, so response completion is
+  not claimed.
+- Aider 0.86.2 was installed with `aider-install`; its wrapper completed a real
+  `--version` process and delivered lifecycle events.
 
