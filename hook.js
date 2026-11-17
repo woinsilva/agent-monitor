@@ -18,6 +18,7 @@
 
 const fs = require('fs');
 const path = require('path');
+const { withSchema } = require('./lib/events');
 const { execFileSync } = require('child_process');
 
 const DATA_DIR = process.env.AGENT_MONITOR_DATA || path.join(__dirname, 'data');
@@ -155,13 +156,13 @@ function main() {
   fs.mkdirSync(DATA_DIR, { recursive: true });
   rememberShape(client, event || data.hook_event_name || '?', data);
 
-  const rec = {
+  const rec = withSchema({
     ts: Date.now(),
     client: client,
     event: event || data.hook_event_name || 'unknown',
     session: data.session_id || data.conversation_id || data.thread_id || 'unknown',
     cwd: data.cwd || process.cwd(),
-  };
+  });
   const agentId = data.agent_id || data.subagent_id || null;
   if (agentId) {
     rec.agent = String(agentId);

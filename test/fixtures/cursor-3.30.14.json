@@ -1,0 +1,40 @@
+{
+  "runtime": "Cursor",
+  "version": "3.30.14",
+  "platform": "win32-x64",
+  "source": "sanitized real shapes plus documented failure fields",
+  "cases": [
+    {
+      "hook": "sessionStart",
+      "input": { "conversation_id": "cursor-session", "cwd": "C:/repo", "model": "example-model" },
+      "event": "SessionStart"
+    },
+    {
+      "hook": "beforeSubmitPrompt",
+      "input": { "conversation_id": "cursor-session", "cwd": "C:/repo", "prompt": "inspect package metadata" },
+      "event": "UserPromptSubmit"
+    },
+    {
+      "hook": "postToolUse",
+      "input": { "conversation_id": "cursor-session", "cwd": "C:/repo", "tool_name": "Read", "tool_input": { "file_path": "package.json" }, "tool_use_id": "call-1", "duration": 12 },
+      "event": "PostToolUse"
+    },
+    {
+      "hook": "postToolUseFailure",
+      "input": { "conversation_id": "cursor-session", "cwd": "C:/repo", "tool_name": "Shell", "error_message": "command failed", "duration": 50 },
+      "event": "PostToolUseFailure",
+      "failed": true
+    },
+    {
+      "hook": "stop",
+      "input": { "conversation_id": "cursor-session", "cwd": "C:/repo" },
+      "event": "Stop"
+    },
+    {
+      "hook": "sessionEnd",
+      "input": { "conversation_id": "cursor-session", "cwd": "C:/repo", "reason": "exit" },
+      "event": "SessionEnd"
+    }
+  ],
+  "unavailable": ["permission-wait", "pre-tool-start"]
+}

@@ -5,6 +5,36 @@
 const fs = require('fs');
 const os = require('os');
 const path = require('path');
+const { spawnSync } = require('child_process');
+
+function binaryStatus(command, options = {}) {
+  const run = options.spawnSync || spawnSync;
+  const result = run(command, ['--version'], {
+    encoding: 'utf8', windowsHide: true, timeout: 5000, shell: process.platform === 'win32',
+  });
+  if (result.error || result.status !== 0) return { installed: false };
+  const line = String(result.stdout || result.stderr || '').trim().split(/\r?\n/)[0];
+  return { installed: true, version: line.slice(0, 120) || 'unknown' };
+}
+
+function recentDelivery(files, data, now = Date.now()) {
+  const clients = {};
+  const cutoff = now - 7 * 86400000;
+  for (const name of files) {
+    let lines = [];
+    try { lines = fs.readFileSync(path.join(data, name), 'utf8').split(/\r?\n/); } catch (_) { continue; }
+    for (const line of lines) {
+      if (!line) continue;
+      try {
+        const event = JSON.parse(line);
+        if (typeof event.client === 'string' && Number.isFinite(event.ts) && event.ts >= cutoff) {
+          clients[event.client] = Math.max(clients[event.client] || 0, event.ts);
+        }
+      } catch (_) {}
+    }
+  }
+  return clients;
+}
 
 function hookStatus(file) {
   if (!fs.existsSync(file)) return { configPresent: false, agentMonitorHooks: false };
@@ -56,12 +86,23 @@ function inspect(options = {}) {
   const eventFiles = fs.existsSync(data)
     ? fs.readdirSync(data).filter(name => /^events-\d{4}-\d{2}-\d{2}\.jsonl$/.test(name))
     : [];
+  const delivered = recentDelivery(eventFiles, data, options.now);
   return {
     agentMonitor: 'installation-readiness',
     platform: process.platform,
     node: { version: process.version, meetsMinimum: major >= 18 },
     dashboard: { entryPointPresent: fs.existsSync(path.join(repo, 'server.js')) },
-    telemetry: { eventFileCount: eventFiles.length, deliveryVerified: false },
+    binaries: {
+      claudeCode: binaryStatus('claude', options),
+      codexCli: binaryStatus('codex', options),
+      cursor: binaryStatus('cursor', options),
+      geminiCli: binaryStatus('gemini', options),
+    },
+    telemetry: {
+      eventFileCount: eventFiles.length,
+      recentByClient: delivered,
+      deliveryVerified: Object.keys(delivered).length > 0,
+    },
     integrations: {
       claudeCode: hookStatus(path.join(home, '.claude', 'settings.json')),
       codexCli: hookStatus(path.join(home, '.codex', 'hooks.json')),
@@ -91,7 +132,9 @@ function main(argv = process.argv.slice(2)) {
     process.stdout.write('Agent Monitor installation diagnostics (read-only)\n');
     process.stdout.write('Node.js: ' + results.node.version + (results.node.meetsMinimum ? ' OK' : ' (requires 18+)') + '\n');
     for (const [name, status] of Object.entries(results.integrations)) {
-      process.stdout.write(name + ': ' + (status.agentMonitorHooks ? 'hooks configured' : 'hooks not detected') +
+      const binary = results.binaries[name];
+      process.stdout.write(name + ': ' + (binary.installed ? binary.version : 'binary not found') + '; ' +
+        (status.agentMonitorHooks ? 'hooks configured' : 'hooks not detected') +
         (status.warning ? ' (' + status.warning + ')' : '') + '\n');
     }
     if (results.projectIntegrations) {
@@ -104,10 +147,12 @@ function main(argv = process.argv.slice(2)) {
       }
     }
     process.stdout.write('Event files: ' + results.telemetry.eventFileCount + '\n');
-    process.stdout.write('Note: send a prompt in a new agent session to confirm real event delivery.\n');
+    const delivered = Object.keys(results.telemetry.recentByClient);
+    process.stdout.write('Recent delivery (7d): ' + (delivered.length ? delivered.join(', ') : 'none') + '\n');
+    process.stdout.write('Note: recent delivery is historical evidence; test a fresh session after changing hooks.\n');
   }
   if (!results.node.meetsMinimum) process.exitCode = 1;
 }
 
 if (require.main === module) main();
-module.exports = { hookStatus, adapterStatus, inspect, main };
+module.exports = { hookStatus, adapterStatus, binaryStatus, recentDelivery, inspect, main };

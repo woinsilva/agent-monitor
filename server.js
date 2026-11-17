@@ -19,6 +19,7 @@
 const fs = require('fs');
 const path = require('path');
 const http = require('http');
+const { validateEvent } = require('./lib/events');
 const os = require('os');
 const config = require('./lib/config');
 const notifier = require('./lib/notify');
@@ -69,6 +70,7 @@ const CONFLICT_WINDOW_MS = 60 * 60 * 1000;
 // ---------------------------------------------------------------- state
 
 const sessions = new Map();   // key -> session
+const sessionAliases = new Map(); // runtime session key -> canonical session id
 // Codex plan usage from its rollout files. rate_limits carries two windows
 // ("primary" is currently 5 hours, "secondary" 7 days). Each is filed by its
 // window_minutes rather than its name, so the 5-hour figure is never shown as
@@ -182,8 +184,29 @@ function refreshCurrent(s) {
   s.current = calls.length ? calls[calls.length - 1] : (s.status === 'working' ? { kind: 'thinking', summary: null, since: s.lastSeen } : null);
 }
 
+function canonicalEvent(ev) {
+  if (ev.client !== 'gemini' || !ev.session) return ev;
+  const incomingKey = keyOf(ev, false);
+  const known = sessionAliases.get(incomingKey);
+  if (known) return Object.assign({}, ev, { session: known });
+
+  // Gemini CLI headless can emit BeforeAgent under the requested --session-id,
+  // then AfterAgent/SessionEnd under a generated runtime id. The same prompt is
+  // present on AfterAgent, so join only when there is exactly one unambiguous
+  // working session in the same directory. Never guess between concurrent runs.
+  if (ev.event !== 'Stop' || typeof ev.prompt !== 'string' || sessions.has(incomingKey)) return ev;
+  const cwd = slashes(ev.cwd || '').toLowerCase();
+  const matches = [...sessions.values()].filter(s =>
+    !s.parentKey && s.client === 'gemini' && s.status === 'working' &&
+    slashes(s.cwd || '').toLowerCase() === cwd && s.prompt === ev.prompt);
+  if (matches.length !== 1) return ev;
+  sessionAliases.set(incomingKey, matches[0].session);
+  return Object.assign({}, ev, { session: matches[0].session });
+}
+
 function applyEvent(ev) {
-  if (!ev || !ev.client || !ev.event) return;
+  if (!validateEvent(ev).ok) return;
+  ev = canonicalEvent(ev);
 
   // Cursor invokes Claude-compatible hooks as well as its native hooks. Both
   // streams use the same session id, so prefer the native Cursor stream and
@@ -743,8 +766,8 @@ function start() {
 }
 
 // for the tests: rebuild state from scratch
-function reset() { sessions.clear(); fileCursors.clear(); }
+function reset() { sessions.clear(); sessionAliases.clear(); fileCursors.clear(); }
 
 if (require.main === module) start();
 
-module.exports = { start, applyEvent, snapshot, reset, sessions, localFile, effectiveStatus };
+module.exports = { start, server, applyEvent, snapshot, reset, sessions, localFile, effectiveStatus };

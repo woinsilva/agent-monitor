@@ -113,3 +113,26 @@ test('duplicate session end events are idempotent', () => {
   assert.equal(s.status, 'ended');
   assert.equal(s.timeline.filter(item => item.event === 'SessionEnd').length, 1);
 });
+
+test('Gemini headless events with a generated runtime id join the requested session', () => {
+  ev({ client: 'gemini', session: 'requested', event: 'SessionStart', cwd: 'C:\\repo' });
+  ev({ client: 'gemini', session: 'requested', event: 'UserPromptSubmit', cwd: 'C:\\repo', prompt: 'hello' });
+  ev({ client: 'gemini', session: 'generated', event: 'Stop', cwd: 'c:/repo', prompt: 'hello', reply: 'done' });
+  ev({ client: 'gemini', session: 'generated', event: 'SessionEnd', cwd: 'c:/repo', reason: 'exit' });
+
+  const s = get('gemini:requested');
+  assert.equal(s.status, 'ended');
+  assert.equal(s.reply, 'done');
+  assert.deepEqual(s.timeline.map(item => item.event), ['SessionStart', 'UserPromptSubmit', 'Stop', 'SessionEnd']);
+  assert.equal(get('gemini:generated'), undefined);
+});
+
+test('Gemini correlation does not guess between concurrent identical prompts', () => {
+  ev({ client: 'gemini', session: 'one', event: 'UserPromptSubmit', cwd: '/repo', prompt: 'same' });
+  ev({ client: 'gemini', session: 'two', event: 'UserPromptSubmit', cwd: '/repo', prompt: 'same' });
+  ev({ client: 'gemini', session: 'generated', event: 'Stop', cwd: '/repo', prompt: 'same', reply: 'unknown owner' });
+
+  assert.equal(get('gemini:one').status, 'working');
+  assert.equal(get('gemini:two').status, 'working');
+  assert.equal(get('gemini:generated').reply, 'unknown owner');
+});

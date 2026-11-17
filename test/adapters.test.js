@@ -8,6 +8,20 @@ const os = require('node:os');
 const { normalize } = require('../agent-bridge');
 const { updateSettings } = require('../configure-agent');
 
+for (const fixtureName of ['cursor-3.30.14.json', 'gemini-0.68.0.json']) {
+  test('golden adapter fixture: ' + fixtureName, () => {
+    const fixture = JSON.parse(fs.readFileSync(path.join(__dirname, 'fixtures', fixtureName), 'utf8'));
+    const client = fixture.runtime === 'Cursor' ? 'cursor' : 'gemini';
+    for (const item of fixture.cases) {
+      const normalized = normalize(client, item.hook, item.input);
+      assert.ok(normalized, item.hook + ' should normalize');
+      assert.equal(normalized.event, item.event, item.hook);
+      if (item.failed) assert.equal(normalized.payload.tool_response?.is_error || normalized.payload.is_error, true, item.hook);
+      assert.equal(JSON.stringify(normalized).includes('redacted'), false, item.hook + ' must omit raw output');
+    }
+  });
+}
+
 test('Cursor preToolUse maps to normalized tool event and excludes identity', () => {
   const event = normalize('cursor', 'preToolUse', {
     conversation_id: 'conversation-1', workspace_roots: ['/repo'],
@@ -32,6 +46,7 @@ test('normalizer excludes raw tool output and transcript', () => {
     tool_response: { llmContent: 'SECRET', exit_code: 1 }, transcript_path: '/secret/location',
   });
   assert.equal(event.payload.tool_response.exit_code, 1);
+  assert.equal(event.payload.tool_response.is_error, true);
   assert.equal(JSON.stringify(event).includes('SECRET'), false);
   assert.equal(JSON.stringify(event).includes('/secret/location'), false);
 });

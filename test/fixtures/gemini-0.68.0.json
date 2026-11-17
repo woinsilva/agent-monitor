@@ -1,0 +1,45 @@
+{
+  "runtime": "Gemini CLI",
+  "version": "0.68.0",
+  "platform": "win32-x64",
+  "source": "sanitized real shapes plus documented ToolPermission notification",
+  "cases": [
+    {
+      "hook": "SessionStart",
+      "input": { "session_id": "gemini-session", "cwd": "C:/repo", "source": "startup" },
+      "event": "SessionStart"
+    },
+    {
+      "hook": "BeforeAgent",
+      "input": { "session_id": "gemini-session", "cwd": "C:/repo", "prompt": "inspect package metadata" },
+      "event": "UserPromptSubmit"
+    },
+    {
+      "hook": "BeforeTool",
+      "input": { "session_id": "gemini-session", "cwd": "C:/repo", "tool_name": "read_file", "tool_input": { "path": "package.json" }, "tool_use_id": "call-1" },
+      "event": "PreToolUse"
+    },
+    {
+      "hook": "Notification",
+      "input": { "session_id": "gemini-session", "cwd": "C:/repo", "notification_type": "ToolPermission", "message": "Permission required" },
+      "event": "PermissionRequest"
+    },
+    {
+      "hook": "AfterTool",
+      "input": { "session_id": "gemini-session", "cwd": "C:/repo", "tool_name": "run_shell_command", "tool_response": { "exit_code": 1, "llmContent": "redacted" } },
+      "event": "PostToolUse",
+      "failed": true
+    },
+    {
+      "hook": "AfterAgent",
+      "input": { "session_id": "gemini-session", "cwd": "C:/repo", "prompt": "inspect package metadata", "prompt_response": "done" },
+      "event": "Stop"
+    },
+    {
+      "hook": "SessionEnd",
+      "input": { "session_id": "gemini-session", "cwd": "C:/repo", "reason": "exit" },
+      "event": "SessionEnd"
+    }
+  ],
+  "knownVariants": ["headless AfterAgent may use a generated session_id"]
+}
