@@ -1,0 +1,5 @@
+{
+  "name": "agent-monitor",
+  "version": "1.0.0-rc.1",
+  "description": "Read-only local diagnostics and privacy-safe audits for Agent Monitor"
+}

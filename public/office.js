@@ -1,9 +1,11 @@
 /* Agent Monitor: "Office" view.
  *
  * A pixel-art office drawn entirely in code (no image files). Every agent is an
- * employee: Claude on the left, Codex on the right, agents reported through
- * report.js (any other client) in the "other agents" room,
- * subagents as interns standing next to whoever called them. What a character is
+ * employee. Claude Code, Codex, Gemini CLI and Cursor each have a fixed
+ * department (two side by side per row) that grows a row of desks for every
+ * three agents; any other client (report.js) gets its own desk in the "other
+ * agents" room, which grows the same way so nobody shares a seat. Subagents are
+ * interns standing next to whoever called them. What a character is
  * doing mirrors the session state; arrivals and departures walk through the door.
  *
  *   Office.mount(element)
@@ -16,7 +18,16 @@
   // ------------------------------------------------------------ geometry (logical px)
   const W = 480, WALL = 58, SLOT_W = 72, SLOT_H = 70, COLS = 3, BOTTOM = 100;
   const FLOOR_TOP = WALL + 6;
-  const ZONE_X = { claude: 8, codex: 256 };
+  // band 0 and 1: fixed departments; band 2: the other agents' room beside the break room
+  const ZONES = {
+    claude: { x: 8, band: 0 }, codex: { x: 256, band: 0 },
+    gemini: { x: 8, band: 1 }, cursor: { x: 256, band: 1 },
+    other: { x: 8, band: 2 },
+  };
+  const DEPTS = ['claude', 'codex', 'gemini', 'cursor'];
+  const BAND_GAP = 16;              // aisle below each row of departments; their signs hang here
+  const OTHER_HEAD = 28;            // whiteboard strip above the other agents' desks
+  const zoneOf = client => (DEPTS.includes(client) ? client : 'other');
   const DOOR = { x: 19, y: WALL + 3 };
   const SPEED = 48;                 // walking speed, logical px per second
   const FRAME_MS = 170;             // sprite animation step
@@ -29,6 +40,7 @@
     floorA: '#d8b78c', floorB: '#cfad82', seam: '#b9966c', plankEdge: '#c4a277',
     door: '#9a6b42', doorFrame: '#6f4a2c', mat: '#7a5c45',
     rugClaude: '#f5dccd', rugClaudeB: '#d9774b', rugCodex: '#d8e5f7', rugCodexB: '#3d7be0',
+    rugGemini: '#e9e0fb', rugGeminiB: '#8a5cf5', rugCursor: '#e3e3e3', rugCursorB: '#4a4a4a',
     deskTop: '#b07c4e', deskHi: '#c48f5f', deskFront: '#87582f', deskLeg: '#6e4626',
     monitor: '#2a2e35', stand: '#4b5059', key: '#d3d6db',
     chair: '#3d4452', chairHi: '#566074', chairLeg: '#2a2f39',
@@ -41,6 +53,8 @@
   const SHIRT = {
     claude: [['#d9774b', '#b65c33'], ['#e58b5f', '#c06a40'], ['#c7643c', '#a14d29']],
     codex: [['#3d7be0', '#2b5fb5'], ['#5a92ea', '#3c74cc'], ['#2f68c4', '#22509b']],
+    gemini: [['#8a5cf5', '#6a3fd0'], ['#9d76f7', '#7a52dc'], ['#7448e0', '#5732b5']],
+    cursor: [['#4a4a4a', '#2e2e2e'], ['#5c5c5c', '#3c3c3c'], ['#3a3a3a', '#202020']],
     other: [['#76b900', '#558700']],
   };
   const PANTS = ['#3a3f4b', '#2d3340', '#4a4036', '#33404a'];
@@ -54,7 +68,7 @@
   let bg = null, bgKey = '';
   let data = { tops: [], kidsOf: () => [], conflicts: [], now: Date.now(), onOpen: () => {} };
   const actors = new Map();
-  const slots = { claude: [], codex: [], review: [] };
+  const slots = { claude: [], codex: [], gemini: [], cursor: [], other: [] };
 
   const t = (k, v) => (window.I18N ? I18N.t(k, v) : k);
   const px = (x, y, w, h, c) => { ctx.fillStyle = c; ctx.fillRect(Math.round(x), Math.round(y), w, h); };
@@ -64,17 +78,18 @@
 
   function lookFor(key, client) {
     const h = hash(key);
-    const shirts = SHIRT[client] || (ZONE_X[client] ? SHIRT.claude : SHIRT.other);
+    const dept = DEPTS.includes(client);
+    const shirts = (dept && SHIRT[client]) || SHIRT.other;
     const [shirt, shirtDark] = shirts[h % shirts.length];
     return {
       seed: h % 97,
       skin: SKIN[(h >>> 3) % SKIN.length],
       hair: HAIR[(h >>> 7) % HAIR.length],
-      style: !ZONE_X[client] ? 0 : (h >>> 11) % 5,
+      style: dept ? (h >>> 11) % 5 : 0,
       shirt, shirtDark,
       pants: PANTS[(h >>> 15) % PANTS.length],
       cap: shirtDark,
-      visor: !ZONE_X[client],
+      visor: !dept,
     };
   }
 
@@ -94,9 +109,16 @@
     if (i >= 0) arr[i] = null;
     while (arr.length && arr[arr.length - 1] == null) arr.pop();
   }
-  const slotXY = (zone, i) => ({ x: ZONE_X[zone] + (i % COLS) * SLOT_W, y: FLOOR_TOP + Math.floor(i / COLS) * SLOT_H });
-  const reviewTop = () => FLOOR_TOP + rows * SLOT_H + 6;
-  const REVIEW_SEATS = [[124, 50], [98, 56], [150, 56]];
+  // rows of desks a zone needs, and the rows of a band (both departments share the taller)
+  const zoneRows = z => Math.max(1, Math.ceil(slots[z].length / COLS));
+  const bandRows = b => Math.max(...Object.keys(ZONES).filter(z => ZONES[z].band === b).map(zoneRows));
+  const bandTop = b => FLOOR_TOP + (b > 0 ? bandRows(0) * SLOT_H + BAND_GAP : 0);
+  const reviewTop = () => bandTop(1) + bandRows(1) * SLOT_H + BAND_GAP;
+  const slotXY = (zone, i) => {
+    const z = ZONES[zone];
+    const top = z.band === 2 ? reviewTop() + OTHER_HEAD : bandTop(z.band);
+    return { x: z.x + (i % COLS) * SLOT_W, y: top + Math.floor(i / COLS) * SLOT_H };
+  };
 
   const nowMs = () => Date.now() + skew;
   const celebrating = a => a.type === 'main' && a.s.status === 'idle' && a.s.finishedAt && nowMs() - a.s.finishedAt < CHEER_MS;
@@ -128,18 +150,15 @@
       a.seated = false;
       return { x: o.x + dx, y: o.y + dy };
     }
-    // other agents: seated at the round table while it exists
-    const [dx, dy] = REVIEW_SEATS[a.slot % REVIEW_SEATS.length];
-    a.seated = true;
-    return { x: dx, y: reviewTop() + dy };
+    return { x: DOOR.x, y: DOOR.y };
   }
 
   function resize() {
-    const used = Math.max(slots.claude.length, slots.codex.length, 1);
-    rows = Math.max(1, Math.ceil(used / COLS));
-    const h = FLOOR_TOP + rows * SLOT_H + 6 + BOTTOM;
-    if (h !== H) {
+    const sig = [bandRows(0), bandRows(1), zoneRows('other')].join(',');
+    const h = reviewTop() + Math.max(BOTTOM, OTHER_HEAD + zoneRows('other') * SLOT_H + BAND_GAP);
+    if (h !== H || sig !== rows) {
       H = h;
+      rows = sig;
       canvas.height = H;
       svg.setAttribute('viewBox', `0 0 ${W} ${H}`);
       bgKey = '';
@@ -161,6 +180,10 @@
       const el = e.target.closest('[data-open]');
       if (el) data.onOpen(el.dataset.open);
     });
+    layer.addEventListener('keydown', e => {
+      const el = e.target.closest('[data-open]');
+      if (el && (e.key === 'Enter' || e.key === ' ')) { e.preventDefault(); data.onOpen(el.dataset.open); }
+    });
     resize();
     start();
   }
@@ -171,8 +194,7 @@
     const want = new Map();
     for (const s of d.tops) {
       if (s.status === 'ended') continue;
-      if (!ZONE_X[s.client]) { want.set(s.key, { s, type: 'ext', zone: 'review' }); continue; }
-      want.set(s.key, { s, type: 'main', zone: s.client });
+      want.set(s.key, { s, type: 'main', zone: zoneOf(s.client) });
       const kids = d.kidsOf(s.key).filter(k => k.status === 'working' || k.status === 'waiting' || k.status === 'stale');
       kids.slice(0, MAX_INTERNS).forEach((k, j) => want.set(k.key, { s: k, type: 'intern', zone: null, parentKey: s.key, j }));
     }
@@ -423,13 +445,6 @@
     px(x - 6, y - 14, 12, 8, C.leafA); px(x - 3, y - 18, 6, 5, C.leafB); px(x - 8, y - 11, 3, 3, C.leafB); px(x + 5, y - 12, 3, 3, C.leafB);
   }
 
-  function roundTable(cx, cy) {
-    const widths = [20, 28, 32, 32, 28];
-    widths.forEach((w, i) => px(cx - w / 2, cy + i, w, 1, i === widths.length - 1 ? '#b9b2a6' : '#e8e3da'));
-    px(cx - 9, cy + 1, 6, 3, '#ffffff'); px(cx + 3, cy + 2, 6, 2, '#ffffff');
-    px(cx - 1, cy + 5, 2, 7, '#8e877c'); px(cx - 6, cy + 12, 12, 1, '#8e877c');
-  }
-
   function skyFor(h) {
     if (h >= 7 && h < 17) return ['#8fc8f2', '#bfe1f7', 'day'];
     if (h >= 17 && h < 19) return ['#f2a46b', '#f7cf8f', 'dusk'];
@@ -468,21 +483,21 @@
     px(8, 14, 23, WALL - 14, C.doorFrame); px(10, 16, 19, WALL - 16, C.door);
     px(12, 19, 15, 14, '#a97a50'); px(12, 36, 15, 14, '#a97a50'); px(25, 37, 2, 2, '#e2c35a');
     px(6, WALL, 27, 4, C.mat);
-    // department rugs
-    const rh = rows * SLOT_H;
-    for (const [zone, fill, border] of [['claude', C.rugClaude, C.rugClaudeB], ['codex', C.rugCodex, C.rugCodexB]]) {
-      const zx = ZONE_X[zone];
-      px(zx - 3, FLOOR_TOP - 3, COLS * SLOT_W + 6, rh + 4, border);
-      px(zx - 1, FLOOR_TOP - 1, COLS * SLOT_W + 2, rh, fill);
+    // department rugs: both rugs of a band share its height
+    for (const [zone, fill, border] of [['claude', C.rugClaude, C.rugClaudeB], ['codex', C.rugCodex, C.rugCodexB],
+      ['gemini', C.rugGemini, C.rugGeminiB], ['cursor', C.rugCursor, C.rugCursorB]]) {
+      const z = ZONES[zone], top = bandTop(z.band), rh = bandRows(z.band) * SLOT_H;
+      px(z.x - 3, top - 3, COLS * SLOT_W + 6, rh + 4, border);
+      px(z.x - 1, top - 1, COLS * SLOT_W + 2, rh, fill);
     }
     // aisle plants
-    for (let r = 0; r < rows; r++) plant(240, FLOOR_TOP + r * SLOT_H + 46);
-    // meeting room (other agents)
+    for (const b of [0, 1]) for (let r = 0; r < bandRows(b); r++) plant(240, bandTop(b) + r * SLOT_H + 46);
+    // other agents' room: one desk each, a whiteboard on the back wall
     const y0 = reviewTop();
     for (let y = y0, r = 0; y < H; y += 8, r++) for (let x = 8, c = 0; x < 240; x += 8, c++) px(x, y, 8, 8, (r + c) % 2 ? C.reviewA : C.reviewB);
     px(8, y0, 232, 2, C.glass); px(8, y0, 2, H - y0, C.glass); px(238, y0, 2, H - y0 - 30, C.glass);
-    px(150, y0 + 6, 52, 20, '#9aa6ad'); px(151, y0 + 7, 50, 18, '#fafafa');
-    plant(24, y0 + 30);
+    px(150, y0 + 4, 52, 20, '#9aa6ad'); px(151, y0 + 5, 50, 18, '#fafafa');
+    plant(220, y0 + 24);
     // copa
     for (let y = y0, r = 0; y < H; y += 8, r++) for (let x = 248, c = 0; x < W; x += 8, c++) px(x, y, 8, 8, (r + c) % 2 ? C.copaA : C.copaB);
     px(256, y0 + 4, 200, 12, '#cfc7b8'); px(256, y0 + 4, 200, 2, '#e2dbcf'); px(256, y0 + 16, 200, 4, '#a89f90');
@@ -502,10 +517,6 @@
   function poseFor(a) {
     const s = a.s, kind = s.current && s.current.kind;
     if (a.moving) return { pose: 'walk', facing: a.dirY < 0 ? 'back' : 'front' };
-    if (a.type === 'ext') {
-      return s.status === 'working' ? { pose: 'read', facing: 'front', noLegs: true }
-        : { pose: 'think', facing: 'front', noLegs: true };
-    }
     if (a.type === 'intern') {
       if (s.status === 'waiting') return { pose: 'raise', facing: 'front' };
       return { pose: 'read', facing: 'front', tablet: true };
@@ -536,8 +547,9 @@
 
     const items = [];
     // desks: every claimed slot plus empty desks to fill each row
-    for (const zone of ['claude', 'codex']) {
-      const n = Math.max(rows * COLS, slots[zone].length);
+    for (const zone of Object.keys(ZONES)) {
+      const zr = ZONES[zone].band === 2 ? zoneRows(zone) : bandRows(ZONES[zone].band);
+      const n = Math.max(zr * COLS, slots[zone].length);
       for (let i = 0; i < n; i++) {
         const o = slotXY(zone, i);
         const key = slots[zone][i];
@@ -550,14 +562,13 @@
       }
     }
     const y0 = reviewTop();
-    items.push({ y: y0 + 58, fn: () => roundTable(124, y0 + 42) });
     // whiteboard ticks while an outside agent works
-    const extWorking = [...actors.values()].some(a => a.type === 'ext' && a.s.status === 'working');
+    const extWorking = [...actors.values()].some(a => a.zone === 'other' && a.type === 'main' && a.s.status === 'working');
     items.push({ y: y0, fn: () => {
       for (let i = 0; i < 4; i++) {
-        px(155, y0 + 10 + i * 4, 2, 2, '#9aa6ad');
-        px(159, y0 + 10 + i * 4, 18 + (i * 7) % 20, 1, '#9aa6ad');
-        if (extWorking ? i <= (frame >> 2) % 5 - 1 : i < 2) px(190, y0 + 10 + i * 4, 3, 2, '#43a04e');
+        px(155, y0 + 8 + i * 4, 2, 2, '#9aa6ad');
+        px(159, y0 + 8 + i * 4, 18 + (i * 7) % 20, 1, '#9aa6ad');
+        if (extWorking ? i <= (frame >> 2) % 5 - 1 : i < 2) px(190, y0 + 8 + i * 4, 3, 2, '#43a04e');
       }
     } });
     // coffee machine light
@@ -567,10 +578,10 @@
       const p = poseFor(a);
       const seatedNow = a.seated && !a.moving && a.mode === 'here';
       const y = p.jump && frame % 4 < 2 ? a.y - 2 : a.y;
-      items.push({ y: a.type === 'ext' && seatedNow ? y0 + 45 : seatedNow ? y + 0.5 : y + 1, fn: () => {
+      items.push({ y: seatedNow ? y + 0.5 : y + 1, fn: () => {
         a.headTop = person(a.x, y, a.look, {
           pose: p.pose, facing: p.facing, mini: a.type === 'intern', tablet: p.tablet,
-          noLegs: seatedNow && p.noLegs && (a.type !== 'ext' || a.slot % 3 === 0), frame: p.still ? 0 : frame + a.look.seed,
+          noLegs: seatedNow && p.noLegs, frame: p.still ? 0 : frame + a.look.seed,
         });
       } });
     }
@@ -591,10 +602,12 @@
 
   function placeLabels() {
     if (!labels) return;
-    const rh = rows * SLOT_H, y0 = reviewTop();
-    labels.innerHTML = `
-      <span class="ol-sign" style="left:${pct(ZONE_X.claude + 108, W)};top:${pct(FLOOR_TOP + rh - 1, H)}">${esc(t('o_claude'))}</span>
-      <span class="ol-sign codex" style="left:${pct(ZONE_X.codex + 108, W)};top:${pct(FLOOR_TOP + rh - 1, H)}">${esc(t('o_codex'))}</span>
+    const sign = zone => {
+      // in the aisle under the rug, clear of the name tags of the last row of desks
+      const z = ZONES[zone], bottom = bandTop(z.band) + bandRows(z.band) * SLOT_H + BAND_GAP - 1;
+      return `<span class="ol-sign ${zone}" style="left:${pct(z.x + 108, W)};top:${pct(bottom, H)}">${esc(t('o_' + zone))}</span>`;
+    };
+    labels.innerHTML = DEPTS.map(sign).join('') + `
       <span class="ol-sign ext" style="left:${pct(124, W)};top:${pct(H - 4, H)}">${esc(t('o_other'))}</span>
       <span class="ol-sign copa" style="left:${pct(364, W)};top:${pct(H - 4, H)}">${esc(t('o_break'))}</span>`;
   }
@@ -612,15 +625,12 @@
     if (a.mode === 'out') return a.type === 'intern' ? null : { cls: 'bye', text: t('o_leaving') };
     if (s.status === 'waiting') return { cls: 'wait', text: '! ' + clip(s.waitingFor || t('o_needs_you'), 46) };
     if (s.status === 'stale') return { cls: 'stale', text: t('o_stale', { ago: ago(s.lastSeen) }) };
-    if (a.type === 'ext') {
-      if (s.status === 'working') return { cls: 'ext', text: clip(s.prompt || t('o_working'), 40) + ' · ' + ago(s.statusSince) };
-      if (s.reply) return { cls: s.failCount ? 'fail' : 'done', text: clip(s.reply, 46) };
-      return null;
-    }
     if (a.type === 'intern') return null;
     if (celebrating(a)) return { cls: 'done', text: t('o_done') };
     if (s.status === 'working') {
       const c = s.current;
+      // report.js clients often send only a prompt, no tool calls
+      if ((!c || c.kind === 'thinking') && a.zone === 'other' && s.prompt) return { cls: 'ext', text: clip(s.prompt, 40) + ' · ' + ago(s.statusSince) };
       if (!c || c.kind === 'thinking') return { cls: 'think', text: t('o_thinking') };
       return { cls: 'work', text: clip(c.summary || c.tool, 46) + ' · ' + ago(c.since) };
     }
@@ -637,22 +647,28 @@
         el.className = 'oa ' + a.type;
         el.dataset.actor = a.key;
         el.dataset.open = a.parentKey || a.key;
-        el.innerHTML = '<div class="ob"></div><div class="otag"></div>';
+        el.tabIndex = 0;
+        el.setAttribute('role', 'button');
+        el.innerHTML = '<div class="ob"></div><div class="otag"></div><div class="oconf" hidden>!</div>';
         layer.appendChild(el);
       }
       const s = a.s;
       const b = bubbleFor(a);
-      const bub = el.firstChild;
+      const bub = el.querySelector('.ob');
       const html = b ? esc(b.text) : '';
       if (bub.dataset.h !== html) { bub.innerHTML = html; bub.dataset.h = html; }
       bub.className = 'ob' + (b ? ' ' + b.cls : ' none');
-      const tag = el.lastChild;
+      const tag = el.querySelector('.otag');
       const name = window.I18N ? I18N.agentName(a.key) : '';
-      const tagText = a.type === 'intern' ? '' : a.breakIdx != null ? name : `${name} · ${s.project}`;
+      // in the shared rooms, say which client this is
+      const who = a.zone === 'other' && window.I18N ? `${name} (${I18N.clientName(s.client)})` : name;
+      // the client name replaces the project there, so neighbouring tags don't run into each other
+      const tagText = a.type === 'intern' ? '' : a.breakIdx != null || a.zone === 'other' ? who : `${who} · ${clip(s.project, 18)}`;
       if (tag.textContent !== tagText) tag.textContent = tagText;
       el.title = a.type === 'intern'
         ? `${s.agentType || 'subagente'}: ${(s.current && s.current.summary) || s.status}`
         : `${s.client} · ${s.project}\n${s.prompt || ''}`;
+      el.setAttribute('aria-label', `${who}, ${s.status}, ${s.project}`);
     }
     drawConflicts();
   }
@@ -671,22 +687,28 @@
       el.classList.toggle('edge-l', a.x < 60);
       el.classList.toggle('edge-r', a.x > W - 60);
     }
-    if (data.conflicts && data.conflicts.length) drawConflicts();
   }
 
+  // Two agents editing the same file: a red "!" beside each one's head. Clicking
+  // the agent opens its card, which names the file and the other agent.
   function drawConflicts() {
-    const lines = [];
+    const files = new Map();   // actor key -> file names it shares with someone
     for (const c of data.conflicts || []) {
-      const pts = c.sessions.map(x => actors.get(x.key)).filter(Boolean);
-      for (let i = 1; i < pts.length; i++) {
-        const a = pts[0], b = pts[i];
-        const ay = (a.headTop || a.y - 20) + 2, by = (b.headTop || b.y - 20) + 2;
-        const name = String(c.path).split(/[\\/]/).pop();
-        lines.push(`<line x1="${a.x}" y1="${ay}" x2="${b.x}" y2="${by}" class="oc-line"/><text x="${(a.x + b.x) / 2}" y="${(ay + by) / 2 - 3}" class="oc-text">${esc(name)}</text>`);
+      const name = String(c.path).split(/[\\/]/).pop();
+      for (const x of c.sessions) {
+        if (!files.has(x.key)) files.set(x.key, []);
+        files.get(x.key).push(name);
       }
     }
-    const html = lines.join('');
-    if (svg.dataset.h !== html) { svg.innerHTML = html; svg.dataset.h = html; }
+    for (const el of layer.children) {
+      const badge = el.querySelector('.oconf');
+      if (!badge) continue;
+      const a = actors.get(el.dataset.actor);
+      const list = a && a.type === 'main' && a.mode !== 'out' ? files.get(a.key) : null;
+      badge.hidden = !list;
+      const title = list ? t('o_conflict', { files: list.join(', ') }) : '';
+      if (badge.title !== title) badge.title = title;
+    }
   }
 
   window.Office = { mount, update, setActive };

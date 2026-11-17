@@ -1,0 +1,36 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/woinsilva/agent-monitor/blob/main/docs/event-schema-v1.json",
+  "title": "Agent Monitor event v1",
+  "type": "object",
+  "required": ["schema", "ts", "client", "event", "session", "cwd"],
+  "properties": {
+    "schema": { "const": 1 },
+    "ts": { "type": "number" },
+    "client": { "type": "string", "minLength": 1, "maxLength": 64 },
+    "event": {
+      "enum": [
+        "SessionStart", "UserPromptSubmit", "PreToolUse", "PostToolUse",
+        "PostToolUseFailure", "PermissionRequest", "Notification", "Stop",
+        "SessionEnd", "SubagentStart", "SubagentStop"
+      ]
+    },
+    "session": { "type": "string", "minLength": 1, "maxLength": 256 },
+    "cwd": { "type": "string" },
+    "model": { "type": "string" },
+    "agent": { "type": "string" },
+    "agentType": { "type": ["string", "null"] },
+    "prompt": { "type": "string", "maxLength": 300 },
+    "reply": { "type": "string", "maxLength": 300 },
+    "tool": { "type": "string" },
+    "kind": { "enum": ["command", "edit", "read", "search", "web", "agent", "mcp", "other", "plan"] },
+    "summary": { "type": "string", "maxLength": 300 },
+    "files": { "type": "array", "maxItems": 20, "items": { "type": "string" } },
+    "failed": { "type": "boolean" },
+    "callId": { "type": "string" },
+    "durationMs": { "type": "number", "minimum": 0 },
+    "usage": { "type": "object" },
+    "git": { "type": "object" }
+  },
+  "additionalProperties": true
+}

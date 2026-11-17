@@ -19,10 +19,13 @@
 const fs = require('fs');
 const path = require('path');
 const http = require('http');
+const { validateEvent } = require('./lib/events');
 const os = require('os');
 const config = require('./lib/config');
 const notifier = require('./lib/notify');
 const report = require('./lib/report');
+const intelligence = require('./lib/intelligence');
+const audit = require('./lib/audit');
 
 let startedAt = Infinity; // set once the replay of past events is done
 
@@ -69,7 +72,24 @@ const CONFLICT_WINDOW_MS = 60 * 60 * 1000;
 // ---------------------------------------------------------------- state
 
 const sessions = new Map();   // key -> session
-const codexLimits = { usedPercent: null, windowMinutes: null, resetsAt: null, at: 0 };
+const sessionAliases = new Map(); // runtime session key -> canonical session id
+// Codex plan usage from its rollout files. rate_limits carries two windows
+// ("primary" is currently 5 hours, "secondary" 7 days). Each is filed by its
+// window_minutes rather than its name, so the 5-hour figure is never shown as
+// the weekly one.
+const codexLimits = { fiveHour: null, weekly: null, at: 0 };
+function codexWindow(w) {
+  if (!w || typeof w.used_percent !== 'number') return null;
+  return { usedPercent: w.used_percent, windowMinutes: w.window_minutes || null, resetsAt: w.resets_at ? w.resets_at * 1000 : null };
+}
+function liveCodexLimits(now) {
+  const out = {};
+  for (const k of ['fiveHour', 'weekly']) {
+    const w = codexLimits[k];
+    if (w && (!w.resetsAt || w.resetsAt > now)) out[k] = w;
+  }
+  return out.fiveHour || out.weekly ? out : null;
+}
 
 // Claude plan usage, written by statusline.js (Claude Code only exposes it to the status line)
 let claudeLimits = null, claudeLimitsStamp = '';
@@ -166,8 +186,53 @@ function refreshCurrent(s) {
   s.current = calls.length ? calls[calls.length - 1] : (s.status === 'working' ? { kind: 'thinking', summary: null, since: s.lastSeen } : null);
 }
 
+function canonicalEvent(ev) {
+  if (ev.client !== 'gemini' || !ev.session) return ev;
+  for (const [alias, value] of sessionAliases) {
+    if (value && typeof value === 'object' && value.expiresAt < ev.ts) sessionAliases.delete(alias);
+  }
+  const incomingKey = keyOf(ev, false);
+  const known = sessionAliases.get(incomingKey);
+  if (known) {
+    if (ev.event === 'SessionStart') { sessionAliases.delete(incomingKey); return ev; }
+    if (typeof known === 'object') known.expiresAt = ev.ts + STALE_MS;
+    return Object.assign({}, ev, { session: typeof known === 'string' ? known : known.session });
+  }
+
+  // Gemini CLI headless can emit BeforeAgent under the requested --session-id,
+  // then AfterAgent/SessionEnd under a generated runtime id. The same prompt is
+  // present on AfterAgent, so join only when there is exactly one unambiguous
+  // working session in the same directory. Never guess between concurrent runs.
+  if (ev.event !== 'Stop' || typeof ev.prompt !== 'string' || sessions.has(incomingKey)) return ev;
+  const cwd = slashes(ev.cwd || '').toLowerCase();
+  const matches = [...sessions.values()].filter(s =>
+    !s.parentKey && s.client === 'gemini' && s.status === 'working' &&
+    slashes(s.cwd || '').toLowerCase() === cwd && s.prompt === ev.prompt);
+  if (matches.length !== 1) return ev;
+  sessionAliases.set(incomingKey, { session: matches[0].session, expiresAt: ev.ts + STALE_MS });
+  return Object.assign({}, ev, { session: matches[0].session });
+}
+
 function applyEvent(ev) {
-  if (!ev || !ev.client || !ev.event) return;
+  const validation = validateEvent(ev);
+  if (!validation.ok) {
+    if (process.env.AGENT_MONITOR_DEBUG === '1') console.error('[agent-monitor] rejected event: ' + validation.errors.join(', '));
+    return;
+  }
+  ev = canonicalEvent(ev);
+
+  // Cursor invokes Claude-compatible hooks as well as its native hooks. Both
+  // streams use the same session id, so prefer the native Cursor stream and
+  // remove/ignore the Claude shadow regardless of event arrival order.
+  const cursorKey = 'cursor:' + ev.session;
+  const claudeKey = 'claude:' + ev.session;
+  if (ev.client === 'claude' && sessions.has(cursorKey)) return;
+  if (ev.client === 'cursor') {
+    for (const key of sessions.keys()) {
+      if (key === claudeKey || key.startsWith(claudeKey + '/')) sessions.delete(key);
+    }
+  }
+
   const topKey = keyOf(ev, false);
   const isSubEvent = !!ev.agent && ev.event !== 'SubagentStart' && ev.event !== 'SubagentStop';
   const top = getSession(ev, topKey, null);
@@ -288,6 +353,9 @@ function applyEvent(ev) {
       break;
 
     case 'SessionEnd':
+      // Gemini CLI may emit the same exit event twice while shutting down.
+      // Terminal events are idempotent: keep a single timeline entry.
+      if (s.status === 'ended' && s.timeline.at(-1)?.event === 'SessionEnd') break;
       for (const c of sessions.values()) {
         if (c === s || c.parentKey === s.key) {
           c.inflight.clear();
@@ -380,12 +448,12 @@ function updateTokens(s) {
           t.total = p.info.total_token_usage.total_tokens || null;
         }
       }
-      const prim = p.rate_limits && p.rate_limits.primary;
+      const rl = p.rate_limits;
       const ts = Date.parse(o.timestamp) || Date.now();
-      if (prim && ts >= codexLimits.at) {
-        codexLimits.usedPercent = prim.used_percent;
-        codexLimits.windowMinutes = prim.window_minutes;
-        codexLimits.resetsAt = prim.resets_at ? prim.resets_at * 1000 : null;
+      if (rl && ts >= codexLimits.at) {
+        for (const w of [codexWindow(rl.primary), codexWindow(rl.secondary)]) {
+          if (w) codexLimits[w.windowMinutes > 1440 ? 'weekly' : 'fiveHour'] = w;
+        }
         codexLimits.at = ts;
       }
     }
@@ -517,7 +585,7 @@ function snapshot() {
     host: HOST_LABEL,
     sessions: [...sessions.values()].map(s => serialize(s, now)),
     conflicts: conflicts(now),
-    codexLimits: codexLimits.usedPercent == null ? null : codexLimits,
+    codexLimits: liveCodexLimits(now),
     claudeLimits: liveClaudeLimits(now),
     settings: { longRunningMinutes: cfg.longRunningMinutes, idleToBreakRoomMinutes: cfg.idleToBreakRoomMinutes },
     phone: notifier.channels(cfg),
@@ -584,7 +652,9 @@ function checkLimits(cfg, now) {
   const cl = liveClaudeLimits(now);
   if (cl && cl.fiveHour) windows.push(['Claude 5h', cl.fiveHour]);
   if (cl && cl.sevenDay) windows.push(['Claude 7d', cl.sevenDay]);
-  if (codexLimits.usedPercent != null) windows.push(['Codex', { usedPercent: codexLimits.usedPercent, resetsAt: codexLimits.resetsAt }]);
+  const cx = liveCodexLimits(now);
+  if (cx && cx.fiveHour) windows.push(['Codex 5h', cx.fiveHour]);
+  if (cx && cx.weekly) windows.push(['Codex 7d', cx.weekly]);
   for (const [who, w] of windows) {
     if (w.usedPercent < threshold) continue;
     const k = 'limit:' + who;
@@ -640,6 +710,24 @@ const server = http.createServer((req, res) => {
     catch (e) { res.writeHead(500); return res.end(JSON.stringify({ error: e.message })); }
     res.writeHead(200, { 'Content-Type': 'application/json; charset=utf-8', 'Cache-Control': 'no-store' });
     return res.end(body);
+  }
+  if (url.pathname === '/api/intelligence') {
+    const days = Math.max(1, Math.min(31, Number(url.searchParams.get('days')) || 14));
+    res.writeHead(200, { 'Content-Type': 'application/json; charset=utf-8', 'Cache-Control': 'no-store' });
+    return res.end(JSON.stringify(intelligence.analyze({ dataDir: DATA_DIR, days })));
+  }
+  if (url.pathname === '/api/replay') {
+    const days = Math.max(1, Math.min(31, Number(url.searchParams.get('days')) || 7));
+    const body = audit.replay({ dataDir: DATA_DIR, days, client: url.searchParams.get('client') || null, project: url.searchParams.get('project') || null, incomplete: url.searchParams.get('incomplete') === '1' });
+    if (body.filters.incomplete) body.sessionCount = audit.countIncompleteSessions(body.events, snapshot().sessions);
+    res.writeHead(200, { 'Content-Type': 'application/json; charset=utf-8', 'Cache-Control': 'no-store' });
+    return res.end(JSON.stringify(body));
+  }
+  if (url.pathname === '/api/export') {
+    const days = Math.max(1, Math.min(31, Number(url.searchParams.get('days')) || 7));
+    const body = audit.aggregateExport({ dataDir: DATA_DIR, days, client: url.searchParams.get('client') || null, project: url.searchParams.get('project') || null, incomplete: url.searchParams.get('incomplete') === '1' });
+    res.writeHead(200, { 'Content-Type': 'application/json; charset=utf-8', 'Cache-Control': 'no-store', 'Content-Disposition': 'attachment; filename="agent-monitor-audit.json"' });
+    return res.end(JSON.stringify(body, null, 2));
   }
   if (url.pathname === '/api/stream') {
     res.writeHead(200, { 'Content-Type': 'text/event-stream', 'Cache-Control': 'no-store', Connection: 'keep-alive' });
@@ -709,8 +797,8 @@ function start() {
 }
 
 // for the tests: rebuild state from scratch
-function reset() { sessions.clear(); fileCursors.clear(); }
+function reset() { sessions.clear(); sessionAliases.clear(); fileCursors.clear(); }
 
 if (require.main === module) start();
 
-module.exports = { start, applyEvent, snapshot, reset, sessions, localFile, effectiveStatus };
+module.exports = { start, server, applyEvent, snapshot, reset, sessions, localFile, effectiveStatus, cleanupOld };

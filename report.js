@@ -25,6 +25,7 @@
 
 const fs = require('fs');
 const path = require('path');
+const { withSchema } = require('./lib/events');
 
 const DATA_DIR = process.env.AGENT_MONITOR_DATA || path.join(__dirname, 'data');
 const EVENTS = { start: 'UserPromptSubmit', tool: 'PostToolUse', wait: 'PermissionRequest', stop: 'Stop', end: 'SessionEnd' };
@@ -54,13 +55,13 @@ function main() {
     return;
   }
   const client = String(args.client).toLowerCase().replace(/[^a-z0-9_.-]+/g, '-');
-  const rec = {
+  const rec = withSchema({
     ts: Date.now(),
     client,
     event: EVENTS[cmd],
     session: String(args.session || process.env.AGENT_MONITOR_SESSION || client + '-' + process.ppid),
     cwd: path.resolve(args.cwd && args.cwd !== true ? String(args.cwd) : process.cwd()),
-  };
+  });
   if (args.model && args.model !== true) rec.model = String(args.model);
   if (cmd === 'start' && args.prompt) rec.prompt = clip(args.prompt, 300);
   if (cmd === 'tool') {

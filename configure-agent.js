@@ -1,0 +1,156 @@
+#!/usr/bin/env node
+'use strict';
+// Opt-in installation for supported external CLIs. Default is DRY RUN.
+const fs = require('node:fs');
+const path = require('node:path');
+const os = require('node:os');
+const crypto = require('node:crypto');
+
+const EVENT_SETS = {
+  cursor: ['sessionStart', 'sessionEnd', 'beforeSubmitPrompt',
+    'postToolUse', 'postToolUseFailure', 'subagentStop', 'stop'],
+  gemini: ['SessionStart', 'SessionEnd', 'BeforeAgent', 'AfterAgent',
+    'BeforeTool', 'AfterTool', 'Notification'],
+  copilot: ['sessionStart', 'sessionEnd', 'userPromptSubmitted', 'preToolUse',
+    'postToolUse', 'postToolUseFailure', 'agentStop', 'subagentStart', 'subagentStop',
+    'permissionRequest', 'notification', 'errorOccurred'],
+};
+
+function targetPath(agent, root, global) {
+  if (agent === 'copilot') return global ? path.join(root, '.copilot', 'settings.json') : path.join(root, '.github', 'hooks', 'agent-monitor.json');
+  const folder = agent === 'cursor' ? '.cursor' : '.gemini';
+  return path.join(root, folder, agent === 'cursor' ? 'hooks.json' : 'settings.json');
+}
+
+function commandFor(agent, event, repo = __dirname) {
+  const script = path.join(repo, 'agent-bridge.js').replace(/\\/g, '/');
+  const runtime = process.execPath.replace(/\\/g, '/');
+  if (process.platform === 'win32') {
+    return 'cmd.exe /d /c call "' + runtime + '" "' + script + '" ' + agent + ' ' + event;
+  }
+  return '"' + runtime + '" "' + script + '" ' + agent + ' ' + event;
+}
+
+function markerFor(dest) {
+  const root = process.env.AGENT_MONITOR_STATE_DIR || path.join(os.homedir(), '.agent-monitor', 'install-state');
+  return path.join(root, crypto.createHash('sha256').update(path.resolve(dest)).digest('hex') + '.created');
+}
+
+function atomicWrite(dest, text) {
+  const target = fs.existsSync(dest) ? fs.realpathSync(dest) : dest;
+  const mode = fs.existsSync(target) ? fs.statSync(target).mode : null;
+  const temporary = target + '.tmp-' + process.pid;
+  try {
+    fs.writeFileSync(temporary, text);
+    if (mode !== null) fs.chmodSync(temporary, mode);
+    fs.renameSync(temporary, target);
+  } catch (error) {
+    try { if (fs.existsSync(temporary)) fs.unlinkSync(temporary); } catch (_) {}
+    throw error;
+  }
+}
+
+function pruneEmptyParents(start, stop) {
+  let current = start;
+  const boundary = path.resolve(stop);
+  while (path.resolve(current).startsWith(boundary + path.sep) && fs.existsSync(current) && fs.readdirSync(current).length === 0) {
+    fs.rmdirSync(current);
+    current = path.dirname(current);
+  }
+}
+
+function ours(value) {
+  return !!value && typeof value.command === 'string' &&
+    value.command.includes('/agent-bridge.js"') && / (cursor|gemini|copilot) \w+"?$/.test(value.command);
+}
+
+function updateSettings(settings, agent, remove, repo = __dirname) {
+  const next = JSON.parse(JSON.stringify(settings || {}));
+  if (!next.hooks || typeof next.hooks !== 'object' || Array.isArray(next.hooks)) next.hooks = {};
+  for (const [event, entries] of Object.entries(next.hooks)) {
+    if (!Array.isArray(entries)) continue;
+    next.hooks[event] = entries.filter(entry => {
+      if (agent === 'cursor' || agent === 'copilot') return !ours(entry);
+      if (!entry || !Array.isArray(entry.hooks)) return true;
+      entry.hooks = entry.hooks.filter(hook => !ours(hook));
+      return entry.hooks.length > 0;
+    });
+    if (next.hooks[event].length === 0) delete next.hooks[event];
+  }
+  if (!remove) {
+    if (agent === 'cursor' || agent === 'copilot') next.version = next.version || 1;
+    for (const event of EVENT_SETS[agent]) {
+      next.hooks[event] = next.hooks[event] || [];
+      const command = commandFor(agent, event, repo);
+      if (agent === 'cursor') next.hooks[event].push({ command });
+      else if (agent === 'copilot') next.hooks[event].push({ type: 'command', command });
+      else next.hooks[event].push({ matcher: '', hooks: [{ name: 'agent-monitor-' + event, type: 'command', command }] });
+    }
+  }
+  if (!Object.keys(next.hooks).length) delete next.hooks;
+  return next;
+}
+
+function main(argv = process.argv.slice(2)) {
+  const idx = argv.indexOf('--agent');
+  const agent = idx < 0 ? null : argv[idx + 1];
+  if (!EVENT_SETS[agent]) {
+    console.error('Usage: node configure-agent.js --agent cursor|gemini|copilot [--global|--project DIR] [--apply|--remove]');
+    process.exitCode = 1; return;
+  }
+  const projectIndex = argv.indexOf('--project');
+  const project = projectIndex >= 0 ? argv[projectIndex + 1] : null;
+  const global = argv.includes('--global');
+  const apply = argv.includes('--apply') || argv.includes('--remove');
+  const remove = argv.includes('--remove');
+  if (global && project) { console.error('Choose --global or --project, not both.'); process.exitCode = 1; return; }
+  if (!global && !project) { console.error('Specify --global or --project DIR.'); process.exitCode = 1; return; }
+  if (project && !fs.existsSync(project)) { console.error('Project directory not found.'); process.exitCode = 1; return; }
+  const root = global ? os.homedir() : path.resolve(project);
+  const dest = targetPath(agent, root, global);
+  const createdMarker = markerFor(dest);
+  const legacyMarker = dest + '.created-by-agent-monitor';
+  let existing = {};
+  try {
+    const existed = fs.existsSync(dest);
+    if (existed) existing = JSON.parse(fs.readFileSync(dest, 'utf8').replace(/^\uFEFF/, ''));
+    if (remove && !fs.existsSync(dest)) { console.log('Nothing to remove: ' + dest); return; }
+    const updated = updateSettings(existing, agent, remove);
+    if (!apply) {
+      console.log('DRY RUN - no files changed. Destination: ' + dest);
+      console.log('Would configure: ' + EVENT_SETS[agent].join(', '));
+      console.log('Re-run with --apply to write, or --remove to uninstall.');
+      return;
+    }
+    if (!remove && !fs.existsSync(path.join(__dirname, 'agent-bridge.js'))) throw new Error('Missing agent-bridge.js');
+    fs.mkdirSync(path.dirname(dest), { recursive: true });
+    if (remove && (fs.existsSync(createdMarker) || fs.existsSync(legacyMarker)) && generatedOnly(updated)) {
+      fs.unlinkSync(dest);
+      if (fs.existsSync(createdMarker)) fs.unlinkSync(createdMarker);
+      if (fs.existsSync(legacyMarker)) fs.unlinkSync(legacyMarker);
+      if (fs.existsSync(dest + '.bak-agent-monitor')) fs.unlinkSync(dest + '.bak-agent-monitor');
+      pruneEmptyParents(path.dirname(dest), root);
+    } else {
+      if (existed) fs.copyFileSync(dest, dest + '.bak-agent-monitor');
+      atomicWrite(dest, JSON.stringify(updated, null, 2) + '\n');
+      if (!remove && !existed) {
+        fs.mkdirSync(path.dirname(createdMarker), { recursive: true });
+        fs.writeFileSync(createdMarker, dest + '\n');
+      }
+      if (remove && fs.existsSync(createdMarker)) fs.unlinkSync(createdMarker);
+      if (remove && fs.existsSync(legacyMarker)) fs.unlinkSync(legacyMarker);
+    }
+    console.log((remove ? 'Removed Agent Monitor hooks from ' : 'Installed Agent Monitor hooks in ') + dest);
+    console.log('Restart the agent and verify that it delivers events; hooks present does not mean tested compatibility.');
+  } catch (e) {
+    console.error('Configuration unchanged or incomplete: ' + e.message);
+    process.exitCode = 1;
+  }
+}
+function generatedOnly(settings) {
+  const copy = JSON.parse(JSON.stringify(settings || {}));
+  if (copy.version === 1) delete copy.version;
+  return Object.keys(copy).length === 0;
+}
+if (require.main === module) main();
+module.exports = { EVENT_SETS, targetPath, commandFor, ours, updateSettings, generatedOnly, markerFor, atomicWrite, main };

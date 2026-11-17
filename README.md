@@ -2,7 +2,7 @@
 
 <p align="center">
   <b>See what your AI coding agents are doing, live, as a pixel-art office.</b><br>
-  Claude Code · Codex · any other agent · runs 100% on your machine
+  Claude Code · Codex · Cursor · Gemini CLI · other agents · runs 100% on your machine
 </p>
 
 <p align="center">
@@ -23,7 +23,7 @@
 
 <picture>
   <source media="(prefers-color-scheme: dark)" srcset="docs/office-dark.png">
-  <img alt="The office view: Claude Code and Codex agents at their desks, one waiting for approval, a red line linking two agents that edited the same file" src="docs/office-light.png">
+  <img alt="The office view with dedicated rooms for Claude Code, Codex, Gemini CLI, Cursor and other agents" src="docs/office-light.png">
 </picture>
 
 When you run several agents at once (a couple of Claude Code sessions, Codex in
@@ -33,9 +33,10 @@ Agent Monitor answers that at a glance.
 
 ## Features
 
-- **Office view.** Every session is an employee at a desk: Claude Code on the left,
-  Codex on the right, other agents in the meeting room, subagents as interns behind
-  the chair of whoever started them. What they do mirrors what the agent does:
+- **Office view.** Every session is an employee at a desk. Claude Code, Codex,
+  Gemini CLI and Cursor have dedicated rooms; every remaining client appears in
+  "Other agents". Rooms grow automatically as sessions arrive. What they do mirrors
+  what the agent does:
 
   | On screen | Means |
   |---|---|
@@ -50,8 +51,8 @@ Agent Monitor answers that at a glance.
   Everyone gets a first name, a blinking light marks the desk of whoever is waiting
   for you, and agents walk in through the door when they start and leave when the
   session ends.
-- **Same-file alert.** A red dashed line links two agents that edited the same file
-  in the last hour, even across Claude Code and Codex.
+- **Same-file alert.** Each involved agent gets a red `!`; hover or click it to see
+  the file, the other agent and the recommended action.
 - **Panel view.** One card per session with the prompt, the current action and for
   how long, how long it has been on this prompt, the **last test run (passed / failed)**,
   the **git branch and uncommitted files**, tool calls, failures, files edited,
@@ -60,6 +61,12 @@ Agent Monitor answers that at a glance.
   agents spent waiting for you**, prompts, tool calls and failure rate, test runs,
   tokens by model and estimated cost, per-project totals, most edited files and the
   commands that fail most. Today, 7 or 14 days.
+- **Agent Health.** Highlights repeated prompts, consecutive failures and recurring
+  test signatures with evidence, confidence and a reversible recommendation. It
+  never changes code or configuration automatically.
+- **Cost Intelligence and local audit.** Shows daily estimated-cost trends (never
+  presented as provider billing), identifies incomplete sessions and exports a
+  private aggregate JSON without prompts, replies or tool payloads.
 - **Running-long alert** when a prompt goes past 30 minutes (configurable).
 - **History.** Click anyone to see their full timeline: prompts, commands, edits,
   permission requests, subagents, replies.
@@ -68,8 +75,9 @@ Agent Monitor answers that at a glance.
   waits for you, runs long, goes silent or finishes, so you can step away from the desk.
 - **Desktop notifications** with a chime when an agent starts waiting for you
   (optionally also when one finishes), and a tab title like `(2) Waiting for you`.
-- **Plan limits:** Claude's 5-hour and weekly usage (through Claude Code's status line,
-  see below) and Codex's weekly limit, with a phone alert when one passes 80%.
+- **Plan limits:** Claude and Codex 5-hour and 7-day windows when their runtimes
+  expose them. Limit cards appear only in the matching client filter; alerts identify
+  each window separately. Claude Desktop does not run the Claude Code status line.
 - **Token use** read from the agents' own session files.
 - **Zero tokens, zero dependencies.** The hooks print nothing, so nothing enters
   the model's context. Plain Node.js, no `npm install`.
@@ -246,8 +254,8 @@ a given project, not both, or every event arrives twice.
 ## Other agents
 
 Anything without hooks (a script calling another model's API, a review bot, a CI
-job, your own agent) can report itself with `report.js` and shows up in the office's
-meeting room:
+job, your own agent) can report itself with `report.js` and shows up in "Other
+agents":
 
 ```sh
 node report.js start --client reviewer --prompt "Independent review of the diff" --model some-model
@@ -259,6 +267,20 @@ node report.js end   --client reviewer
 Calls from the same script run share a session automatically (or pass `--session`).
 `wait` marks the agent as waiting for you and `stop --failed` records a failure. The
 header of `report.js` lists every option.
+
+Node integrations can avoid manual JSONL entirely with the validated SDK:
+
+```js
+const { createReporter } = require('./lib/sdk');
+const agent = createReporter({ client: 'reviewer', session: 'review-1' });
+agent.start('Review the diff');
+agent.afterTool('review', { kind: 'read', summary: 'Inspected the patch' });
+agent.stop('No blockers');
+agent.end();
+```
+
+For local audit automation, `GET /api/replay` accepts `days`, `client`, `project`
+and `incomplete=1`; `GET /api/export` returns aggregate metadata only.
 
 <details>
 <summary>Writing the events yourself, from any language</summary>
@@ -321,3 +343,51 @@ Append one JSON object per line to `data/events-YYYY-MM-DD.jsonl` (local date):
 ## License
 
 [MIT](LICENSE)
+
+
+## Agent compatibility
+
+Agent Monitor supports **Claude Code** and **Codex CLI** as its baseline.
+**Cursor 3.30.14** and **Gemini CLI 0.68.0** are preview integrations with
+versioned adapters and sanitized fixtures. Cursor lifecycle/tool delivery was
+verified on Windows; Gemini permission allow/deny/cancel remains deferred after
+an upstream 503. Support depends on runtime telemetry, not model names.
+
+GitHub Copilot CLI 1.0.112, OpenCode 2.3.0 and Aider 0.86.2 also have opt-in
+preview adapters. Copilot uses documented project hooks, OpenCode uses the local
+V2 plugin in `integrations/opencode`, and Aider uses `integrations/aider.js`
+because Aider does not expose stable lifecycle hooks.
+
+Inspect the installation without changing anything:
+
+```sh
+node agent-monitor.js doctor --json
+```
+
+For Cursor, Gemini CLI and Copilot, review the proposed configuration in dry-run mode:
+
+```sh
+node agent-monitor.js install --agent cursor --project /path/to/project
+node agent-monitor.js install --agent gemini --project /path/to/project
+node agent-monitor.js install --agent copilot --project /path/to/project
+```
+
+After checking the configuration changes and confirming permission:
+
+```sh
+node agent-monitor.js install --agent cursor --project /path/to/project --apply
+node agent-monitor.js install --agent gemini --project /path/to/project --apply
+```
+
+The installer keeps backups in `*.bak-agent-monitor`; uninstall with
+`node agent-monitor.js uninstall --agent cursor --project /path --apply`.
+**Restart the chosen agent and verify new event files** before treating
+the integration as working. Configured hooks alone are insufficient evidence.
+On Windows, use a suitable absolute project path. When Node isn't discoverable
+on the agent's PATH, the bridge cannot run.
+
+The dashboard and Free version remain locally hosted and MIT licensed.
+See the [compatibility matrix](docs/COMPATIBILITY.md), [release tasks](docs/RELEASE_TASKS.md)
+and [integration roadmap](docs/integration-roadmap.md) for known coverage gaps and
+the proposed agent-independent event format. A future commercial Agensi skill
+will be distributed separately, not embedded in this public repository.

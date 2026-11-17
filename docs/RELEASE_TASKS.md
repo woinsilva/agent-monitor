@@ -1,0 +1,74 @@
+# Agent Monitor — tarefas para Free 1.0 e evolução Pro
+
+Este arquivo é o quadro executável derivado de `PRODUCT_STATUS_AND_ROADMAP.md`.
+Estados: `todo`, `doing`, `blocked`, `done`.
+
+## Fase 0 — fechar a branch de compatibilidade
+
+| ID | Estado | Tarefa | Dependências | Critério de aceite |
+|---|---|---|---|---|
+| P0-01 | done | Correlacionar IDs divergentes do Gemini no mesmo turno | fixtures reais | prompt/Stop/SessionEnd formam uma sessão; nenhuma órfã working |
+| P0-02 | done | Criar fixtures sanitizadas Cursor/Gemini e matriz de versões | P0-01 | fixtures sem segredos cobrem lifecycle, tool, failure e permission |
+| P0-03 | blocked | Testar permissões reais do Gemini | P0-01, P0-02 | execução 2026-11-17 bloqueada por 503 do Google antes da permissão; repetir permitir/negar/cancelar |
+| P0-04 | done | Testar permissões reais do Cursor | P0-02 | lifecycle/tool reais validados; permissão marcada indisponível e hooks decisórios não instalados |
+| P0-05 | done | Atualizar alegações e limitações EN/PT-BR | P0-01..04 | README e matriz distinguem supported/preview/unavailable |
+| P0-06 | done | Atualizar PR, executar CI e revisão independente | P0-01..05 | PR atualizado; CI 44090709203 com 9 jobs verdes; gpt-review APPROVE sem bloqueios |
+
+## Fase 1 — estabilizar Agent Monitor Free 1.0
+
+| ID | Estado | Tarefa | Dependências | Critério de aceite |
+|---|---|---|---|---|
+| P1-01 | done | Introduzir schema de eventos versionado | P0-02 | schema, validação tolerante e compatibilidade com eventos existentes |
+| P1-02 | done | Separar adaptadores por runtime | P1-01 | normalizadores isolados e golden tests por versão |
+| P1-03 | done | Unificar setup e diagnóstico | P1-01 | CLI única oferece doctor, preview, apply, backup, uninstall e delivery check |
+| P1-04 | done | Testar servidor, SSE, alertas e retenção | P1-01 | HTTP/SSE/static/retenção e canais de alerta cobertos por testes |
+| P1-05 | done | Adicionar smoke test de browser e office | P0-05 | smoke manual e contrato automatizado cobrem filtros, limites, conflitos e views |
+| P1-06 | done | Documentar backup/restore/upgrade/rollback Docker | P1-04 | procedimento reproduzível e persistência confirmada em rebuild real |
+| P1-07 | done | Atualizar screenshots e documentação bilíngue | P1-05 | documentação EN/PT-BR e capturas de Escritório, Painel e Relatório atualizadas |
+| P1-08 | done | Preparar release candidate 1.0 | P1-01..07 | 1.0.0-rc.1, changelog, 67 testes e CI em Node 18/20/22 nos três sistemas |
+
+## Fase 2 — inteligência operacional
+
+| ID | Estado | Tarefa | Dependências | Critério de aceite |
+|---|---|---|---|---|
+| P2-01 | done | Agent Health: repetição e falhas consecutivas | P1-01 | diagnóstico com contagem, período, confiança e sem autocorreção |
+| P2-02 | done | Agent Health: testes reincidentes e causas prováveis | P2-01 | assinatura agrupada, causa provável e recomendação reversível |
+| P2-03 | done | Cost Intelligence histórica | P1-01 | tendência diária rotulada como estimativa, separada de cobrança |
+| P2-04 | done | Replay/auditoria e exportação local | P1-04 | filtros por período/cliente/projeto/incompletas e export sem texto privado |
+| P2-05 | done | SDK mínimo de eventos | P1-01 | `lib/sdk.js` valida e grava lifecycle de agentes externos |
+| P2-06 | done | Acessibilidade e regressão visual | P1-05 | teclado, nomes de estado, foco visível, reduced motion e testes de contrato |
+
+## Fase 3 — produto Pro e ecossistema
+
+| ID | Estado | Tarefa | Dependências | Critério de aceite |
+|---|---|---|---|---|
+| P3-01 | done | Definir matriz Free/Pro e proposta comercial | P2-01..04 | recursos pagos têm valor e não removem direitos MIT existentes |
+| P3-02 | done | Projetar licença, ativação e atualização Pro | P3-01 | fluxo offline/online, privacidade, suporte e threat model |
+| P3-03 | done | Implementar aplicativo Pro | P3-02 | pacote, ativação e recursos premium testados |
+| P3-04 | done | Adaptador GitHub Copilot | P1-01..03 | versão/OS/capacidades e teste real documentados |
+| P3-05 | done | Adaptador OpenCode | P1-01..03 | versão/OS/capacidades e teste real documentados |
+| P3-06 | done | Adaptador Aider | P1-01..03 | versão/OS/capacidades e teste real documentados |
+| P3-07 | done | Avaliar plugin Codex/ChatGPT Work | P1-01, P2-05 | apenas superfícies oficiais, scripts locais e confiança explícita |
+
+## Fase 4 — skills Agensi
+
+| ID | Estado | Tarefa | Dependências | Critério de aceite |
+|---|---|---|---|---|
+| A-01 | done | Versionar fontes Free/Pro em repositório privado | nenhuma | build reproduzível dos ZIPs exatos |
+| A-02 | done | Revalidar Free no release 1.0 | P1-08, A-01 | comandos e compatibilidade correspondem ao release |
+| A-03 | done | Revalidar auditor Pro | P0-01, P1-01, A-01 | testes e métricas refletem schema final |
+| A-04 | done | Preparar listing, preço, pagamentos e suporte | A-02, A-03 | pacote pronto para revisão humana pré-publicação, sem publicação automática |
+| A-05 | blocked | Submeter Free e depois Pro | A-04 | excluído deste escopo pelo usuário; nenhum pacote publicado |
+
+## Ordem imediata de execução
+
+1. P0-01: correlação Gemini.
+2. P0-02: fixtures e matriz.
+3. P0-05 (parte programática): documentação conhecida.
+4. P1-01/P1-02: schema e adaptadores.
+5. P1-04: integração backend.
+6. P1-03: setup unificado.
+7. P1-06/P1-07: operação e docs.
+8. P0-03/P0-04/P1-05: testes que exigem interação com aplicativos, somente no final e após aviso ao usuário.
+9. P0-06: push, CI e revisão.
+

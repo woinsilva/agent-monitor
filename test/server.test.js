@@ -85,3 +85,91 @@ test('project name comes from Windows and POSIX folders alike', () => {
   assert.equal(get('claude:w').project, 'shop-api');
   assert.equal(get('claude:u').project, 'web-app');
 });
+
+test('native Cursor events replace and suppress Claude compatibility shadows', () => {
+  ev({ client: 'claude', session: 'shared', event: 'SessionStart', cwd: 'C:\\Users\\me\\.claude' });
+  assert.ok(get('claude:shared'));
+
+  ev({ client: 'cursor', session: 'shared', event: 'SessionStart', cwd: 'C:\\repo' });
+  assert.equal(get('claude:shared'), undefined);
+  assert.ok(get('cursor:shared'));
+
+  ev({ client: 'claude', session: 'shared', event: 'UserPromptSubmit', prompt: 'duplicate' });
+  assert.equal(get('claude:shared'), undefined);
+  assert.equal(get('cursor:shared').turns, 0);
+
+  ev({ client: 'cursor', session: 'shared', event: 'UserPromptSubmit', prompt: 'real' });
+  assert.equal(get('cursor:shared').turns, 1);
+  assert.equal(get('cursor:shared').prompt, 'real');
+});
+
+test('duplicate session end events are idempotent', () => {
+  ev({ client: 'gemini', session: 'g', event: 'UserPromptSubmit', prompt: 'hello' });
+  ev({ client: 'gemini', session: 'g', event: 'Stop', reply: 'done' });
+  ev({ client: 'gemini', session: 'g', event: 'SessionEnd', reason: 'exit' });
+  ev({ client: 'gemini', session: 'g', event: 'SessionEnd', reason: 'exit' });
+
+  const s = get('gemini:g');
+  assert.equal(s.status, 'ended');
+  assert.equal(s.timeline.filter(item => item.event === 'SessionEnd').length, 1);
+});
+
+test('Gemini headless events with a generated runtime id join the requested session', () => {
+  ev({ client: 'gemini', session: 'requested', event: 'SessionStart', cwd: 'C:\\repo' });
+  ev({ client: 'gemini', session: 'requested', event: 'UserPromptSubmit', cwd: 'C:\\repo', prompt: 'hello' });
+  ev({ client: 'gemini', session: 'generated', event: 'Stop', cwd: 'c:/repo', prompt: 'hello', reply: 'done' });
+  ev({ client: 'gemini', session: 'generated', event: 'SessionEnd', cwd: 'c:/repo', reason: 'exit' });
+
+  const s = get('gemini:requested');
+  assert.equal(s.status, 'ended');
+  assert.equal(s.reply, 'done');
+  assert.deepEqual(s.timeline.map(item => item.event), ['SessionStart', 'UserPromptSubmit', 'Stop', 'SessionEnd']);
+  assert.equal(get('gemini:generated'), undefined);
+});
+
+test('Gemini runtime aliases are released when the canonical session ends', () => {
+  ev({ client: 'gemini', session: 'requested', event: 'UserPromptSubmit', cwd: '/repo', prompt: 'hello' });
+  ev({ client: 'gemini', session: 'generated', event: 'Stop', cwd: '/repo', prompt: 'hello' });
+  ev({ client: 'gemini', session: 'generated', event: 'SessionEnd', cwd: '/repo' });
+  ev({ client: 'gemini', session: 'generated', event: 'SessionStart', cwd: '/other' });
+  assert.ok(get('gemini:generated'));
+  assert.equal(get('gemini:requested').status, 'ended');
+});
+
+test('duplicate Gemini runtime SessionEnd remains correlated until a new start', () => {
+  ev({ client: 'gemini', session: 'requested', event: 'UserPromptSubmit', cwd: '/repo', prompt: 'hello' });
+  ev({ client: 'gemini', session: 'generated', event: 'Stop', cwd: '/repo', prompt: 'hello' });
+  ev({ client: 'gemini', session: 'generated', event: 'SessionEnd', cwd: '/repo' });
+  ev({ client: 'gemini', session: 'generated', event: 'SessionEnd', cwd: '/repo' });
+  assert.equal(get('gemini:generated'), undefined);
+  assert.equal(get('gemini:requested').timeline.filter(item => item.event === 'SessionEnd').length, 1);
+});
+
+test('Gemini runtime aliases renew while events keep arriving', () => {
+  ev({ client: 'gemini', session: 'requested', event: 'UserPromptSubmit', cwd: '/repo', prompt: 'hello' });
+  ev({ client: 'gemini', session: 'generated', event: 'Stop', cwd: '/repo', prompt: 'hello' });
+  clock += 10 * 60 * 1000;
+  ev({ client: 'gemini', session: 'generated', event: 'Notification', cwd: '/repo' });
+  clock += 11 * 60 * 1000;
+  ev({ client: 'gemini', session: 'generated', event: 'SessionEnd', cwd: '/repo' });
+  assert.equal(get('gemini:generated'), undefined);
+  assert.equal(get('gemini:requested').status, 'ended');
+});
+
+test('inactive Gemini runtime aliases are pruned lazily on later events', () => {
+  ev({ client: 'gemini', session: 'requested', event: 'UserPromptSubmit', cwd: '/repo', prompt: 'hello' });
+  ev({ client: 'gemini', session: 'generated', event: 'Stop', cwd: '/repo', prompt: 'hello' });
+  clock += 21 * 60 * 1000;
+  ev({ client: 'gemini', session: 'generated', event: 'SessionEnd', cwd: '/repo' });
+  assert.ok(get('gemini:generated'));
+});
+
+test('Gemini correlation does not guess between concurrent identical prompts', () => {
+  ev({ client: 'gemini', session: 'one', event: 'UserPromptSubmit', cwd: '/repo', prompt: 'same' });
+  ev({ client: 'gemini', session: 'two', event: 'UserPromptSubmit', cwd: '/repo', prompt: 'same' });
+  ev({ client: 'gemini', session: 'generated', event: 'Stop', cwd: '/repo', prompt: 'same', reply: 'unknown owner' });
+
+  assert.equal(get('gemini:one').status, 'working');
+  assert.equal(get('gemini:two').status, 'working');
+  assert.equal(get('gemini:generated').reply, 'unknown owner');
+});

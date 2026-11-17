@@ -71,6 +71,16 @@ test('prices by longest model prefix', () => {
   assert.equal(c.cost, 11);
 });
 
+test('daily cost trend is explicitly derived from priced usage', () => {
+  const dir = dataDir([
+    Object.assign({ ts: T(0), client: 'external', session: 'c1', event: 'Stop', model: 'model-a', usage: { input_tokens: 1e6, output_tokens: 1e6 } }, base),
+  ]);
+  const r = report.build({ dataDir: dir, days: 1, prices: { 'model-a': { input: 1, output: 2 } }, now: T(1) });
+  assert.equal(r.days[0].tokens, 2e6);
+  assert.equal(r.days[0].estimatedCost, 3);
+  assert.equal(r.totals.cost, 3);
+});
+
 test('report.js CLI writes events any script can use', () => {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'am-cli-'));
   const run = args => execFileSync(process.execPath, [path.join(__dirname, '..', 'report.js'), ...args], { env: Object.assign({}, process.env, { AGENT_MONITOR_DATA: dir }) });

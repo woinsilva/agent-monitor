@@ -2,7 +2,7 @@
 
 <p align="center">
   <b>Veja ao vivo o que seus agentes de IA estão fazendo, num escritório em pixel art.</b><br>
-  Claude Code · Codex · qualquer outro agente · roda 100% no seu computador
+  Claude Code · Codex · Cursor · Gemini CLI · outros agentes · roda 100% no seu computador
 </p>
 
 <p align="center">
@@ -14,7 +14,7 @@
 
 <picture>
   <source media="(prefers-color-scheme: dark)" srcset="docs/office-dark.png">
-  <img alt="O escritório: agentes do Claude Code e do Codex nas mesas, um esperando aprovação e uma linha vermelha ligando dois agentes que editaram o mesmo arquivo" src="docs/office-light.png">
+  <img alt="O escritório: salas separadas para Claude Code, Codex, Gemini CLI, Cursor e outros agentes" src="docs/office-light.png">
 </picture>
 
 Quando você roda vários agentes ao mesmo tempo (algumas sessões do Claude Code, o
@@ -24,9 +24,9 @@ mesmo arquivo. O Agent Monitor mostra isso de relance.
 
 ## O que ele faz
 
-- **Escritório.** Cada sessão é um funcionário numa mesa: Claude Code à esquerda,
-  Codex à direita, outros agentes na sala de reunião e subagentes como estagiários
-  atrás da cadeira de quem os chamou.
+- **Escritório.** Cada sessão é um funcionário numa mesa. Claude Code, Codex,
+  Gemini CLI e Cursor têm salas próprias; os demais clientes ficam em "Outros
+  agentes". As salas crescem automaticamente quando chegam mais sessões.
 
   | Na tela | Significa |
   |---|---|
@@ -40,8 +40,8 @@ mesmo arquivo. O Agent Monitor mostra isso de relance.
 
   Cada um tem um nome, uma luz pisca na mesa de quem está esperando você, e os
   agentes entram pela porta quando começam e saem quando a sessão termina.
-- **Alerta de mesmo arquivo.** Uma linha vermelha liga dois agentes que editaram o
-  mesmo arquivo na última hora, inclusive entre Claude Code e Codex.
+- **Alerta de mesmo arquivo.** Cada agente envolvido recebe um `!` vermelho; passe
+  o mouse ou clique para ver o arquivo, o outro agente e a ação recomendada.
 - **Painel.** Um card por sessão com o pedido, a ação atual e há quanto tempo,
   ferramentas usadas, falhas, arquivos editados, uso do contexto e subagentes.
 - **Selos nos cards:** há quanto tempo está no pedido atual, **resultado do último
@@ -49,6 +49,12 @@ mesmo arquivo. O Agent Monitor mostra isso de relance.
 - **Relatório** de hoje, 7 ou 14 dias: horas de agente por dia, **quanto tempo os
   agentes ficaram esperando você**, pedidos, falhas, testes, tokens por modelo, custo
   estimado, totais por projeto, arquivos mais editados e comandos que mais falham.
+- **Saúde dos agentes:** destaca pedidos repetidos, falhas consecutivas e testes
+  reincidentes com evidência, confiança e recomendação reversível. Nunca altera o
+  código ou a configuração automaticamente.
+- **Inteligência de custos e auditoria local:** mostra tendência diária de custo
+  estimado (não uma fatura), sessões incompletas e exporta JSON agregado sem
+  pedidos, respostas ou payloads de ferramentas.
 - **Alerta de demora** quando um pedido passa de 30 minutos (configurável).
 - **Aviso no celular** pelo [ntfy](https://ntfy.sh) ou Telegram quando um agente espera
   você, demora, fica sem sinal ou termina.
@@ -56,7 +62,9 @@ mesmo arquivo. O Agent Monitor mostra isso de relance.
 - **Linha do tempo do dia**, com quantos agentes rodaram ao mesmo tempo.
 - **Notificações** com som quando um agente fica esperando você (e, se quiser,
   quando termina), e o título da aba vira `(2) Esperando você`.
-- **Uso de tokens** lido dos próprios arquivos de sessão, mais o limite semanal do Codex.
+- **Uso e limites:** tokens lidos dos arquivos de sessão e janelas de 5h/7d de
+  Claude/Codex quando o runtime fornece os dados. Os cards aparecem apenas no filtro
+  do cliente correspondente; o Claude Desktop não executa o statusline do Claude Code.
 - **Zero tokens, zero dependências.** Os hooks não imprimem nada, então nada entra
   no contexto da IA. Só Node.js, sem `npm install`.
 - Em português e inglês, conforme o navegador.
@@ -81,18 +89,38 @@ Precisa de **Node.js 18+**. Docker é opcional.
 git clone https://github.com/woinsilva/agent-monitor.git
 cd agent-monitor
 
-# 1. instale os hooks: para um projeto...
-node install.js /caminho/do/projeto
-#    ...ou para todos os projetos do seu usuário
-node install.js --global
+# 1. confira o ambiente e visualize as mudanças sem gravar nada
+node agent-monitor.js doctor
+node agent-monitor.js install --agent core --project /caminho/do/projeto
 
-# 2. suba o painel
+# 2. aplique depois de revisar o escopo
+node agent-monitor.js install --agent core --project /caminho/do/projeto --apply
+
+# 3. suba o painel
 node server.js
 ```
 
 Abra http://localhost:4400 e mande um pedido ao Claude Code ou ao Codex. Na primeira
 vez o Codex pede para confiar nos hooks novos: aceite. Sessões que já estavam abertas
 podem precisar ser reabertas.
+
+Use `--agent cursor` ou `--agent gemini` para os adaptadores de preview. A opção
+`--global` substitui `--project`. `verify --agent <cliente>` confere a configuração
+e entregas recentes; `uninstall` também exige `--apply`, para evitar remoções
+acidentais. Os instaladores antigos continuam disponíveis para compatibilidade.
+
+### Compatibilidade
+
+| Cliente | Estado | Observação |
+|---|---|---|
+| Claude Code | suportado | hooks e statusline opcionais |
+| Codex CLI | suportado | hooks de projeto ou globais |
+| Cursor | preview | lifecycle e ferramentas; hooks decisórios não são instalados |
+| Gemini CLI | preview | lifecycle, ferramentas e pedido de permissão; confirmação real de permitir/negar ainda pendente |
+| GitHub Copilot CLI | preview | hooks de projeto e entrega real validados no Windows |
+| OpenCode | preview | plugin V2 local; lifecycle real validado |
+| Aider | wrapper | wrapper local, pois não há hooks lifecycle estáveis |
+| outros | SDK/`report.js` | integração explícita pelo emissor local |
 
 ### Deixar sempre no ar com Docker
 
@@ -154,6 +182,20 @@ node report.js end   --client revisor
 
 Chamadas do mesmo script caem na mesma sessão automaticamente. `wait` marca como
 esperando você e `stop --failed` registra uma falha.
+
+Integrações Node podem usar o SDK validado em vez de escrever JSONL manualmente:
+
+```js
+const { createReporter } = require('./lib/sdk');
+const agente = createReporter({ client: 'revisor', session: 'revisao-1' });
+agente.start('Revisar o diff');
+agente.afterTool('review', { kind: 'read', summary: 'Patch revisado' });
+agente.stop('Sem bloqueios');
+agente.end();
+```
+
+Para automação de auditoria local, `GET /api/replay` aceita `days`, `client`,
+`project` e `incomplete=1`; `GET /api/export` devolve apenas metadados agregados.
 
 O funcionamento interno, a instalação dos hooks, o formato dos eventos e a solução de
 problemas estão detalhados no [README em inglês](README.md).
