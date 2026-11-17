@@ -770,4 +770,4 @@ function reset() { sessions.clear(); sessionAliases.clear(); fileCursors.clear()
 
 if (require.main === module) start();
 
-module.exports = { start, server, applyEvent, snapshot, reset, sessions, localFile, effectiveStatus };
+module.exports = { start, server, applyEvent, snapshot, reset, sessions, localFile, effectiveStatus, cleanupOld };

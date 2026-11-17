@@ -2,6 +2,11 @@
 const test = require('node:test');
 const assert = require('node:assert/strict');
 const http = require('node:http');
+const fs = require('node:fs');
+const os = require('node:os');
+const path = require('node:path');
+const testData = fs.mkdtempSync(path.join(os.tmpdir(), 'am-http-'));
+process.env.AGENT_MONITOR_DATA = testData;
 const monitor = require('../server.js');
 
 function request(port, pathname) {
@@ -42,4 +47,18 @@ test('HTTP API, static files and SSE expose the same current state', async t => 
   });
   assert.match(firstSse.headers['content-type'], /text\/event-stream/);
   assert.match(firstSse.chunk, /retry: 2000/);
+});
+
+test('retention removes only expired event logs', () => {
+  const old = path.join(testData, 'events-2020-01-01.jsonl');
+  const keep = path.join(testData, 'events-2099-01-01.jsonl');
+  const unrelated = path.join(testData, 'notes.txt');
+  fs.writeFileSync(old, '{}\n');
+  fs.writeFileSync(keep, '{}\n');
+  fs.writeFileSync(unrelated, 'keep');
+  fs.utimesSync(old, new Date(0), new Date(0));
+  monitor.cleanupOld();
+  assert.equal(fs.existsSync(old), false);
+  assert.equal(fs.existsSync(keep), true);
+  assert.equal(fs.existsSync(unrelated), true);
 });

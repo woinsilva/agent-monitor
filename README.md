@@ -68,8 +68,9 @@ Agent Monitor answers that at a glance.
   waits for you, runs long, goes silent or finishes, so you can step away from the desk.
 - **Desktop notifications** with a chime when an agent starts waiting for you
   (optionally also when one finishes), and a tab title like `(2) Waiting for you`.
-- **Plan limits:** Claude's 5-hour and weekly usage (through Claude Code's status line,
-  see below) and Codex's weekly limit, with a phone alert when one passes 80%.
+- **Plan limits:** Claude and Codex 5-hour and 7-day windows when their runtimes
+  expose them. Limit cards appear only in the matching client filter; alerts identify
+  each window separately. Claude Desktop does not run the Claude Code status line.
 - **Token use** read from the agents' own session files.
 - **Zero tokens, zero dependencies.** The hooks print nothing, so nothing enters
   the model's context. Plain Node.js, no `npm install`.
@@ -323,41 +324,43 @@ Append one JSON object per line to `data/events-YYYY-MM-DD.jsonl` (local date):
 [MIT](LICENSE)
 
 
-## Agent compatibility preview (development branch)
+## Agent compatibility
 
-The stable published version starts with native **Claude Code** and **Codex CLI**
-hooks. A development branch adds **Cursor** and **Gemini CLI** adapters, but
-these are not production-supported until real sessions have been verified on
-each tool. No implementation can reliably monitor every AI model by name alone;
-support depends on the coding-agent runtime and its telemetry hooks.
+Agent Monitor supports **Claude Code** and **Codex CLI** as its baseline.
+**Cursor 3.30.14** and **Gemini CLI 0.68.0** are preview integrations with
+versioned adapters and sanitized fixtures. Cursor lifecycle/tool delivery was
+verified on Windows; Gemini permission allow/deny/cancel remains deferred after
+an upstream 503. Support depends on runtime telemetry, not model names.
 
-On the development branch, inspect the installation without changing anything:
+Inspect the installation without changing anything:
 
 ```sh
-node doctor.js --json
+node agent-monitor.js doctor --json
 ```
 
 For Cursor and Gemini CLI, review the proposed configuration in dry-run mode:
 
 ```sh
-node configure-agent.js --agent cursor --project /path/to/project
-node configure-agent.js --agent gemini --project /path/to/project
+node agent-monitor.js install --agent cursor --project /path/to/project
+node agent-monitor.js install --agent gemini --project /path/to/project
 ```
 
 After checking the configuration changes and confirming permission:
 
 ```sh
-node configure-agent.js --agent cursor --project /path/to/project --apply
-node configure-agent.js --agent gemini --project /path/to/project --apply
+node agent-monitor.js install --agent cursor --project /path/to/project --apply
+node agent-monitor.js install --agent gemini --project /path/to/project --apply
 ```
 
-The installer keeps backups in `*.bak-agent-monitor` and can remove its own hooks with
-`--remove`. **Restart the chosen agent and verify new event files** before treating
+The installer keeps backups in `*.bak-agent-monitor`; uninstall with
+`node agent-monitor.js uninstall --agent cursor --project /path --apply`.
+**Restart the chosen agent and verify new event files** before treating
 the integration as working. Configured hooks alone are insufficient evidence.
 On Windows, use a suitable absolute project path. When Node isn't discoverable
 on the agent's PATH, the bridge cannot run.
 
 The dashboard and Free version remain locally hosted and MIT licensed.
-See [integration roadmap](docs/integration-roadmap.md) for known coverage gaps and
+See the [compatibility matrix](docs/COMPATIBILITY.md), [release tasks](docs/RELEASE_TASKS.md)
+and [integration roadmap](docs/integration-roadmap.md) for known coverage gaps and
 the proposed agent-independent event format. A future commercial Agensi skill
 will be distributed separately, not embedded in this public repository.

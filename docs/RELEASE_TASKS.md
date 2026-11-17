@@ -11,7 +11,7 @@ Estados: `todo`, `doing`, `blocked`, `done`.
 | P0-02 | done | Criar fixtures sanitizadas Cursor/Gemini e matriz de versões | P0-01 | fixtures sem segredos cobrem lifecycle, tool, failure e permission |
 | P0-03 | blocked | Testar permissões reais do Gemini | P0-01, P0-02 | execução 2026-11-17 bloqueada por 503 do Google antes da permissão; repetir permitir/negar/cancelar |
 | P0-04 | done | Testar permissões reais do Cursor | P0-02 | lifecycle/tool reais validados; permissão marcada indisponível e hooks decisórios não instalados |
-| P0-05 | todo | Atualizar alegações e limitações EN/PT-BR | P0-01..04 | docs distinguem supported/preview/unavailable |
+| P0-05 | done | Atualizar alegações e limitações EN/PT-BR | P0-01..04 | README e matriz distinguem supported/preview/unavailable |
 | P0-06 | todo | Atualizar PR, executar CI e revisão independente | P0-01..05 | HEAD remoto, 9 jobs verdes e revisão sem P0/P1 |
 
 ## Fase 1 — estabilizar Agent Monitor Free 1.0
@@ -20,12 +20,12 @@ Estados: `todo`, `doing`, `blocked`, `done`.
 |---|---|---|---|---|
 | P1-01 | done | Introduzir schema de eventos versionado | P0-02 | schema, validação tolerante e compatibilidade com eventos existentes |
 | P1-02 | done | Separar adaptadores por runtime | P1-01 | normalizadores isolados e golden tests por versão |
-| P1-03 | doing | Unificar setup e diagnóstico | P1-01 | doctor detecta binário/versão/escopo e delivery recente; falta fluxo único de preview/consentimento/uninstall |
-| P1-04 | doing | Testar servidor, SSE, alertas e retenção | P1-01 | HTTP/SSE/static automatizados; falta retenção e integração de alertas |
-| P1-05 | doing | Adicionar smoke test de browser e office | P0-05 | smoke manual 2026-11-17 passou; falta automatizar filtros, cards, badges e views |
-| P1-06 | doing | Documentar backup/restore/upgrade/rollback Docker | P1-04 | procedimento documentado; falta ensaio completo com cópia restaurada |
-| P1-07 | todo | Atualizar screenshots e documentação bilíngue | P1-05 | README EN/PT-BR e imagens correspondem ao produto |
-| P1-08 | todo | Preparar release candidate 1.0 | P1-01..07 | changelog, versão, instalação limpa e CI multiplataforma |
+| P1-03 | done | Unificar setup e diagnóstico | P1-01 | CLI única oferece doctor, preview, apply, backup, uninstall e delivery check |
+| P1-04 | done | Testar servidor, SSE, alertas e retenção | P1-01 | HTTP/SSE/static/retenção e canais de alerta cobertos por testes |
+| P1-05 | done | Adicionar smoke test de browser e office | P0-05 | smoke manual e contrato automatizado cobrem filtros, limites, conflitos e views |
+| P1-06 | done | Documentar backup/restore/upgrade/rollback Docker | P1-04 | procedimento reproduzível e persistência confirmada em rebuild real |
+| P1-07 | done | Atualizar screenshots e documentação bilíngue | P1-05 | documentação EN/PT-BR e capturas de Escritório, Painel e Relatório atualizadas |
+| P1-08 | doing | Preparar release candidate 1.0 | P1-01..07 | 1.0.0-rc.1 e changelog prontos; falta CI multiplataforma |
 
 ## Fase 2 — inteligência operacional
 

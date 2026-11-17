@@ -1,6 +1,6 @@
 {
   "name": "agent-monitor",
-  "version": "0.2.0",
+  "version": "1.0.0-rc.1",
   "description": "Local live dashboard (and pixel-art office) for Claude Code, Codex and other AI coding agents",
   "private": true,
   "engines": {
@@ -12,6 +12,8 @@
     "notify:test": "node lib/notify.js --test",
     "demo": "node demo.js",
     "setup": "node setup.js",
+    "doctor": "node agent-monitor.js doctor",
+    "verify": "node agent-monitor.js verify",
     "docker": "node setup.js && docker compose up -d --build",
     "hooks": "node install.js",
     "hooks:global": "node install.js --global"

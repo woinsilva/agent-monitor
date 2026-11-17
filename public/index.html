@@ -316,7 +316,9 @@
   $('langBtn').onclick = () => I18N.setLang(I18N.lang === 'pt' ? 'en' : 'pt');
 
   let state = null, skew = 0, openKey = null;
-  const ui = { client: store('am.client') || 'all', project: store('am.project') || '', showOld: store('am.showOld') === '1', view: store('am.view') || 'office' };
+  const query = new URLSearchParams(location.search);
+  const requestedView = ['office', 'panel', 'report'].includes(query.get('view')) ? query.get('view') : null;
+  const ui = { client: query.get('client') || store('am.client') || 'all', project: store('am.project') || '', showOld: query.get('old') === '1' || store('am.showOld') === '1', view: requestedView || store('am.view') || 'office' };
   const ENDED_VISIBLE_MS = 10 * 60 * 1000;
   const RECENT_IDLE_MS = 3 * 3600 * 1000;
   const KNOWN = new Set(['claude', 'codex']);
