@@ -2,7 +2,7 @@
 
 <p align="center">
   <b>See what your AI coding agents are doing, live, as a pixel-art office.</b><br>
-  Claude Code · Codex · any other agent · runs 100% on your machine
+  Claude Code · Codex · Cursor · Gemini CLI · other agents · runs 100% on your machine
 </p>
 
 <p align="center">
@@ -23,7 +23,7 @@
 
 <picture>
   <source media="(prefers-color-scheme: dark)" srcset="docs/office-dark.png">
-  <img alt="The office view: Claude Code and Codex agents at their desks, one waiting for approval, a red line linking two agents that edited the same file" src="docs/office-light.png">
+  <img alt="The office view with dedicated rooms for Claude Code, Codex, Gemini CLI, Cursor and other agents" src="docs/office-light.png">
 </picture>
 
 When you run several agents at once (a couple of Claude Code sessions, Codex in
@@ -33,9 +33,10 @@ Agent Monitor answers that at a glance.
 
 ## Features
 
-- **Office view.** Every session is an employee at a desk: Claude Code on the left,
-  Codex on the right, other agents in the meeting room, subagents as interns behind
-  the chair of whoever started them. What they do mirrors what the agent does:
+- **Office view.** Every session is an employee at a desk. Claude Code, Codex,
+  Gemini CLI and Cursor have dedicated rooms; every remaining client appears in
+  "Other agents". Rooms grow automatically as sessions arrive. What they do mirrors
+  what the agent does:
 
   | On screen | Means |
   |---|---|
@@ -50,8 +51,8 @@ Agent Monitor answers that at a glance.
   Everyone gets a first name, a blinking light marks the desk of whoever is waiting
   for you, and agents walk in through the door when they start and leave when the
   session ends.
-- **Same-file alert.** A red dashed line links two agents that edited the same file
-  in the last hour, even across Claude Code and Codex.
+- **Same-file alert.** Each involved agent gets a red `!`; hover or click it to see
+  the file, the other agent and the recommended action.
 - **Panel view.** One card per session with the prompt, the current action and for
   how long, how long it has been on this prompt, the **last test run (passed / failed)**,
   the **git branch and uncommitted files**, tool calls, failures, files edited,
@@ -247,8 +248,8 @@ a given project, not both, or every event arrives twice.
 ## Other agents
 
 Anything without hooks (a script calling another model's API, a review bot, a CI
-job, your own agent) can report itself with `report.js` and shows up in the office's
-meeting room:
+job, your own agent) can report itself with `report.js` and shows up in "Other
+agents":
 
 ```sh
 node report.js start --client reviewer --prompt "Independent review of the diff" --model some-model

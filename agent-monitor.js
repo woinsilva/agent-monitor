@@ -32,13 +32,18 @@ function main(argv = process.argv.slice(2), options = {}) {
   const agent = at >= 0 ? args[at + 1] : null;
   if (action === 'verify') {
     if (!['claude', 'codex', 'cursor', 'gemini'].includes(agent)) { console.error(usage()); return 1; }
-    const result = require('./doctor').inspect({ project: valueAfter(args, '--project') });
+    const projectArg = valueAfter(args, '--project');
+    const inspect = options.inspect || require('./doctor').inspect;
+    const result = inspect({ project: projectArg ? path.resolve(projectArg) : null });
     const delivered = result.telemetry.recentByClient[agent];
     console.log(delivered ? agent + ': delivery seen at ' + new Date(delivered).toISOString() : agent + ': no delivery in the last 7 days');
     return delivered ? 0 : 2;
   }
   if (!['install', 'uninstall'].includes(action) || !['core', 'cursor', 'gemini'].includes(agent)) {
     console.error(usage()); return 1;
+  }
+  if (args.includes('--remove')) {
+    console.error('--remove is internal. Use uninstall with --apply. No files changed.'); return 1;
   }
   const apply = args.includes('--apply');
   if (action === 'uninstall' && !apply) {

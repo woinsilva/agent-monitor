@@ -17,9 +17,18 @@ function binaryStatus(command, options = {}) {
   return { installed: true, version: line.slice(0, 120) || 'unknown' };
 }
 
-function recentDelivery(files, data, now = Date.now()) {
+function canonicalDirectory(value) {
+  if (typeof value !== 'string') return '';
+  const normalized = value.replace(/\\/g, '/').replace(/\/+$/, '');
+  return /^[a-z]:\//i.test(normalized) || normalized.startsWith('//')
+    ? normalized.toLowerCase()
+    : normalized;
+}
+
+function recentDelivery(files, data, now = Date.now(), project = null) {
   const clients = {};
   const cutoff = now - 7 * 86400000;
+  const requested = canonicalDirectory(project);
   for (const name of files) {
     let lines = [];
     try { lines = fs.readFileSync(path.join(data, name), 'utf8').split(/\r?\n/); } catch (_) { continue; }
@@ -27,7 +36,9 @@ function recentDelivery(files, data, now = Date.now()) {
       if (!line) continue;
       try {
         const event = JSON.parse(line);
-        if (typeof event.client === 'string' && Number.isFinite(event.ts) && event.ts >= cutoff) {
+        const cwd = canonicalDirectory(event.cwd);
+        const inProject = !requested || cwd === requested || cwd.startsWith(requested + '/');
+        if (inProject && typeof event.client === 'string' && Number.isFinite(event.ts) && event.ts >= cutoff) {
           clients[event.client] = Math.max(clients[event.client] || 0, event.ts);
         }
       } catch (_) {}
@@ -80,13 +91,13 @@ function adapterStatus(file, agent) {
 function inspect(options = {}) {
   const home = options.home || os.homedir();
   const repo = options.repo || __dirname;
-  const project = options.project || null;
+  const project = options.project ? path.resolve(options.project) : null;
   const data = process.env.AGENT_MONITOR_DATA || path.join(repo, 'data');
   const major = Number(process.versions.node.split('.')[0]);
   const eventFiles = fs.existsSync(data)
     ? fs.readdirSync(data).filter(name => /^events-\d{4}-\d{2}-\d{2}\.jsonl$/.test(name))
     : [];
-  const delivered = recentDelivery(eventFiles, data, options.now);
+  const delivered = recentDelivery(eventFiles, data, options.now, project);
   return {
     agentMonitor: 'installation-readiness',
     platform: process.platform,

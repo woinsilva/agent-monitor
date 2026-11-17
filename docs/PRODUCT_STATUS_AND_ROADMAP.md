@@ -1,5 +1,9 @@
 # Agent Monitor — estado do produto e roadmap
 
+> Snapshot histórico da auditoria inicial. Para o estado executável atual e os
+> critérios de conclusão, consulte `RELEASE_TASKS.md`; quando houver divergência,
+> o quadro de tarefas e o código mais recente prevalecem.
+
 Auditoria realizada em 17 de novembro de 2026 sobre a branch
 `feat/agensi-readiness`. Este documento descreve evidências encontradas no
 código, nos testes, no container local, no PR #1 e nos pacotes Agensi locais.

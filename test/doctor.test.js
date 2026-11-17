@@ -71,3 +71,26 @@ test('recent delivery reports client timestamps but not event contents', () => {
   fs.writeFileSync(path.join(data, name), JSON.stringify({ client: 'gemini', ts: now, prompt: 'secret' }) + '\n');
   assert.deepEqual(recentDelivery([name], data, now), { gemini: now });
 });
+
+test('recent delivery can be scoped to a project and its subdirectories', () => {
+  const data = fs.mkdtempSync(path.join(os.tmpdir(), 'am-doctor-scope-'));
+  const now = Date.now();
+  const name = 'events-2026-11-17.jsonl';
+  fs.writeFileSync(path.join(data, name), [
+    { client: 'cursor', ts: now - 1, cwd: 'C:\\repo\\app' },
+    { client: 'gemini', ts: now, cwd: 'C:\\other' },
+  ].map(JSON.stringify).join('\n') + '\n');
+  assert.deepEqual(recentDelivery([name], data, now, 'c:/repo'), { cursor: now - 1 });
+});
+
+test('POSIX project matching preserves case while Windows drive paths do not', () => {
+  const data = fs.mkdtempSync(path.join(os.tmpdir(), 'am-doctor-case-'));
+  const now = Date.now();
+  const name = 'events-2026-11-17.jsonl';
+  fs.writeFileSync(path.join(data, name), [
+    { client: 'cursor', ts: now - 1, cwd: '/work/App' },
+    { client: 'gemini', ts: now, cwd: 'C:\\Work\\App' },
+  ].map(JSON.stringify).join('\n') + '\n');
+  assert.deepEqual(recentDelivery([name], data, now, '/work/app'), {});
+  assert.deepEqual(recentDelivery([name], data, now, 'c:/work/app'), { gemini: now });
+});
