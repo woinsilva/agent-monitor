@@ -61,6 +61,12 @@ Agent Monitor answers that at a glance.
   agents spent waiting for you**, prompts, tool calls and failure rate, test runs,
   tokens by model and estimated cost, per-project totals, most edited files and the
   commands that fail most. Today, 7 or 14 days.
+- **Agent Health.** Highlights repeated prompts, consecutive failures and recurring
+  test signatures with evidence, confidence and a reversible recommendation. It
+  never changes code or configuration automatically.
+- **Cost Intelligence and local audit.** Shows daily estimated-cost trends (never
+  presented as provider billing), identifies incomplete sessions and exports a
+  private aggregate JSON without prompts, replies or tool payloads.
 - **Running-long alert** when a prompt goes past 30 minutes (configurable).
 - **History.** Click anyone to see their full timeline: prompts, commands, edits,
   permission requests, subagents, replies.
@@ -261,6 +267,20 @@ node report.js end   --client reviewer
 Calls from the same script run share a session automatically (or pass `--session`).
 `wait` marks the agent as waiting for you and `stop --failed` records a failure. The
 header of `report.js` lists every option.
+
+Node integrations can avoid manual JSONL entirely with the validated SDK:
+
+```js
+const { createReporter } = require('./lib/sdk');
+const agent = createReporter({ client: 'reviewer', session: 'review-1' });
+agent.start('Review the diff');
+agent.afterTool('review', { kind: 'read', summary: 'Inspected the patch' });
+agent.stop('No blockers');
+agent.end();
+```
+
+For local audit automation, `GET /api/replay` accepts `days`, `client`, `project`
+and `incomplete=1`; `GET /api/export` returns aggregate metadata only.
 
 <details>
 <summary>Writing the events yourself, from any language</summary>

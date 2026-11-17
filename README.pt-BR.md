@@ -49,6 +49,12 @@ mesmo arquivo. O Agent Monitor mostra isso de relance.
 - **Relatório** de hoje, 7 ou 14 dias: horas de agente por dia, **quanto tempo os
   agentes ficaram esperando você**, pedidos, falhas, testes, tokens por modelo, custo
   estimado, totais por projeto, arquivos mais editados e comandos que mais falham.
+- **Saúde dos agentes:** destaca pedidos repetidos, falhas consecutivas e testes
+  reincidentes com evidência, confiança e recomendação reversível. Nunca altera o
+  código ou a configuração automaticamente.
+- **Inteligência de custos e auditoria local:** mostra tendência diária de custo
+  estimado (não uma fatura), sessões incompletas e exporta JSON agregado sem
+  pedidos, respostas ou payloads de ferramentas.
 - **Alerta de demora** quando um pedido passa de 30 minutos (configurável).
 - **Aviso no celular** pelo [ntfy](https://ntfy.sh) ou Telegram quando um agente espera
   você, demora, fica sem sinal ou termina.
@@ -173,6 +179,20 @@ node report.js end   --client revisor
 
 Chamadas do mesmo script caem na mesma sessão automaticamente. `wait` marca como
 esperando você e `stop --failed` registra uma falha.
+
+Integrações Node podem usar o SDK validado em vez de escrever JSONL manualmente:
+
+```js
+const { createReporter } = require('./lib/sdk');
+const agente = createReporter({ client: 'revisor', session: 'revisao-1' });
+agente.start('Revisar o diff');
+agente.afterTool('review', { kind: 'read', summary: 'Patch revisado' });
+agente.stop('Sem bloqueios');
+agente.end();
+```
+
+Para automação de auditoria local, `GET /api/replay` aceita `days`, `client`,
+`project` e `incomplete=1`; `GET /api/export` devolve apenas metadados agregados.
 
 O funcionamento interno, a instalação dos hooks, o formato dos eventos e a solução de
 problemas estão detalhados no [README em inglês](README.md).

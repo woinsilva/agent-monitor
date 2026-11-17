@@ -180,6 +180,10 @@
       const el = e.target.closest('[data-open]');
       if (el) data.onOpen(el.dataset.open);
     });
+    layer.addEventListener('keydown', e => {
+      const el = e.target.closest('[data-open]');
+      if (el && (e.key === 'Enter' || e.key === ' ')) { e.preventDefault(); data.onOpen(el.dataset.open); }
+    });
     resize();
     start();
   }
@@ -643,6 +647,8 @@
         el.className = 'oa ' + a.type;
         el.dataset.actor = a.key;
         el.dataset.open = a.parentKey || a.key;
+        el.tabIndex = 0;
+        el.setAttribute('role', 'button');
         el.innerHTML = '<div class="ob"></div><div class="otag"></div><div class="oconf" hidden>!</div>';
         layer.appendChild(el);
       }
@@ -662,6 +668,7 @@
       el.title = a.type === 'intern'
         ? `${s.agentType || 'subagente'}: ${(s.current && s.current.summary) || s.status}`
         : `${s.client} · ${s.project}\n${s.prompt || ''}`;
+      el.setAttribute('aria-label', `${who}, ${s.status}, ${s.project}`);
     }
     drawConflicts();
   }

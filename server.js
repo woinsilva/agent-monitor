@@ -24,6 +24,8 @@ const os = require('os');
 const config = require('./lib/config');
 const notifier = require('./lib/notify');
 const report = require('./lib/report');
+const intelligence = require('./lib/intelligence');
+const audit = require('./lib/audit');
 
 let startedAt = Infinity; // set once the replay of past events is done
 
@@ -697,6 +699,23 @@ const server = http.createServer((req, res) => {
     catch (e) { res.writeHead(500); return res.end(JSON.stringify({ error: e.message })); }
     res.writeHead(200, { 'Content-Type': 'application/json; charset=utf-8', 'Cache-Control': 'no-store' });
     return res.end(body);
+  }
+  if (url.pathname === '/api/intelligence') {
+    const days = Math.max(1, Math.min(31, Number(url.searchParams.get('days')) || 14));
+    res.writeHead(200, { 'Content-Type': 'application/json; charset=utf-8', 'Cache-Control': 'no-store' });
+    return res.end(JSON.stringify(intelligence.analyze({ dataDir: DATA_DIR, days })));
+  }
+  if (url.pathname === '/api/replay') {
+    const days = Math.max(1, Math.min(31, Number(url.searchParams.get('days')) || 7));
+    const body = audit.replay({ dataDir: DATA_DIR, days, client: url.searchParams.get('client') || null, project: url.searchParams.get('project') || null, incomplete: url.searchParams.get('incomplete') === '1' });
+    res.writeHead(200, { 'Content-Type': 'application/json; charset=utf-8', 'Cache-Control': 'no-store' });
+    return res.end(JSON.stringify(body));
+  }
+  if (url.pathname === '/api/export') {
+    const days = Math.max(1, Math.min(31, Number(url.searchParams.get('days')) || 7));
+    const body = audit.aggregateExport({ dataDir: DATA_DIR, days, client: url.searchParams.get('client') || null, project: url.searchParams.get('project') || null, incomplete: url.searchParams.get('incomplete') === '1' });
+    res.writeHead(200, { 'Content-Type': 'application/json; charset=utf-8', 'Cache-Control': 'no-store', 'Content-Disposition': 'attachment; filename="agent-monitor-audit.json"' });
+    return res.end(JSON.stringify(body, null, 2));
   }
   if (url.pathname === '/api/stream') {
     res.writeHead(200, { 'Content-Type': 'text/event-stream', 'Cache-Control': 'no-store', Connection: 'keep-alive' });

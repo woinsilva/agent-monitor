@@ -158,6 +158,7 @@
   .btn { border: 1px solid var(--border); background: var(--panel); border-radius: 8px; padding: 5px 12px; cursor: pointer; }
   .btn:hover { background: var(--panel-2); }
   .btn.on { color: var(--working); border-color: color-mix(in srgb, var(--working) 40%, var(--border)); }
+  :focus-visible { outline: 3px solid color-mix(in srgb, var(--codex) 75%, white); outline-offset: 2px; }
   [hidden] { display: none !important; }
 
   /* office */
@@ -234,6 +235,13 @@
   table.rt td.num, table.rt th.num { text-align: right; }
   table.rt td.mono { font-family: var(--mono); font-size: 12px; overflow-wrap: anywhere; }
   .rbar { height: 6px; border-radius: 3px; background: var(--c-codex); opacity: .8; }
+  .intelligence { margin-top: 12px; }
+  .health-list { display: grid; gap: 10px; }
+  .health-item { border-left: 4px solid var(--waiting); background: var(--panel-2); border-radius: 8px; padding: 9px 11px; display: grid; gap: 4px; }
+  .health-item > .tag { margin-left: 8px; width: max-content; }
+  @media (prefers-reduced-motion: reduce) {
+    *, *::before, *::after { animation-duration: .001ms !important; animation-iteration-count: 1 !important; transition-duration: .001ms !important; scroll-behavior: auto !important; }
+  }
   @media (max-width: 860px) { .rcols { grid-template-columns: 1fr; } }
 
   @media (max-width: 640px) {
@@ -391,7 +399,7 @@
       const c = k.status === 'waiting' ? (k.waitingFor || t('k_wait')) : (k.status === 'working' || k.status === 'stale') ? activity(k).text : (k.reply || STATUS(k.status));
       return `<div class="subrow"><span class="dot ${k.status}"></span><span class="t">${esc(k.agentType || t('subagent'))}</span><span class="s" title="${esc(c)}">${esc(c)}</span><span class="foot">${k.status === 'done' ? t('ok') : ago(k.lastSeen)}</span></div>`;
     }).join('')}</div>` : '';
-    return `<article class="card ${s.status}" data-key="${esc(s.key)}">
+    return `<article class="card ${s.status}" data-key="${esc(s.key)}" role="button" tabindex="0" aria-label="${esc(agentName(s.key) + ', ' + STATUS(s.status) + ', ' + s.project)}">
       <div class="row">${badge(s.client)}<span class="proj" title="${esc(s.cwd)}">${esc(agentName(s.key))} · ${esc(s.project)}</span><span class="model">${esc(shortModel(s.model))}</span><span class="pill ${s.status}">${esc(STATUS(s.status))}</span></div>
       <div class="prompt ${s.prompt ? '' : 'none'}" title="${esc(s.prompt)}">${esc(s.prompt || t('no_prompt'))}</div>
       ${nowBlock(s)}
@@ -616,8 +624,12 @@
     renderRange();
     if (!$('report').innerHTML) $('report').innerHTML = `<div class="sub">${esc(t('r_loading'))}</div>`;
     try {
-      const r = await (await fetch('/api/report?days=' + reportDays)).json();
-      renderReport(r);
+      const [r, health, incomplete] = await Promise.all([
+        fetch('/api/report?days=' + reportDays).then(x => x.json()),
+        fetch('/api/intelligence?days=' + reportDays).then(x => x.json()),
+        fetch('/api/replay?days=' + reportDays + '&incomplete=1').then(x => x.json()),
+      ]);
+      renderReport(r, health, incomplete);
     } catch (e) {
       $('report').innerHTML = `<div class="sub">${esc(String(e))}</div>`;
     }
@@ -663,7 +675,7 @@
     return `M${x},${y + h}V${y + r}Q${x},${y} ${x + r},${y}H${x + w - r}Q${x + w},${y} ${x + w},${y + r}V${y + h}Z`;
   }
 
-  function renderReport(r) {
+  function renderReport(r, health, incomplete) {
     const T = r.totals;
     if (!T.hours && !T.prompts && !T.tools) { $('report').innerHTML = `<div class="empty">${esc(t('r_none'))}</div>`; return; }
     const tiles = [
@@ -698,7 +710,16 @@
           <table class="rt"><thead><tr><th>${esc(t('r_model'))}</th><th class="num">${esc(t('r_input'))}</th><th class="num">${esc(t('r_cache'))}</th><th class="num">${esc(t('r_output'))}</th>${r.pricesConfigured ? `<th class="num">${esc(t('r_cost'))}</th>` : ''}</tr></thead>
           <tbody>${r.models.map(m => `<tr><td class="mono">${esc(m.model)}</td><td class="num">${fmtK(m.input + m.cacheWrite)}</td><td class="num">${fmtK(m.cacheRead)}</td><td class="num">${fmtK(m.output)}</td>${r.pricesConfigured ? `<td class="num">${m.priced ? money(m.cost) : '—'}</td>` : ''}</tr>`).join('')}</tbody></table>
         </div>` : ''}
-      </div>`;
+      </div>
+      ${renderIntelligence(r, health, incomplete)}`;
+  }
+
+  function renderIntelligence(r, health, incomplete) {
+    const findings = health && health.findings || [];
+    const costSeries = [{ label: t('r_cost'), color: 'var(--c-codex)', value: d => d.estimatedCost || 0 }];
+    const cost = r.pricesConfigured ? `<div class="rcard"><h3>${esc(t('r_cost_trend'))}</h3>${barChart(r.days, costSeries, { fmt: v => money(v), label: t('r_cost_trend'), minMax: .01 })}</div>` : '';
+    const cards = findings.length ? findings.map(f => `<div class="health-item" role="listitem"><b>${esc(f.type.replaceAll('_', ' '))}</b><span class="tag">${esc(t('r_confidence', { level: f.confidence }))}</span><div>${esc(f.project)} · ${esc(f.sample || '')}</div>${f.probableCause ? `<div class="sub">${esc(f.probableCause)}</div>` : ''}<div>${esc(f.recommendation)}</div><div class="sub">${esc(t('r_evidence', { count: f.evidence.count }))} · ${esc(t('r_no_autofix'))}</div></div>`).join('') : `<div class="sub">${esc(t('r_health_none'))}</div>`;
+    return `<div class="rcols intelligence"><div class="rcard ${cost ? '' : 'wide'}"><h3>${esc(t('r_health'))}</h3><div class="health-list" role="list">${cards}</div></div>${cost}<div class="rcard wide"><h3>${esc(t('r_audit'))}</h3><p>${incomplete.events.length} ${esc(t('r_incomplete'))}. <a class="btn" href="/api/export?days=${reportDays}&incomplete=1" download>${esc(t('r_export'))}</a></p></div></div>`;
   }
 
   // one tooltip for every chart mark
@@ -828,6 +849,10 @@
   });
   $('drawerBg').onclick = closeDrawer;
   document.addEventListener('keydown', e => { if (e.key === 'Escape') closeDrawer(); });
+  document.addEventListener('keydown', e => {
+    const el = e.target.closest && e.target.closest('[data-key][role="button"]');
+    if (el && (e.key === 'Enter' || e.key === ' ')) { e.preventDefault(); openDrawer(el.dataset.key); }
+  });
 
   $('clientSeg').onclick = e => {
     const b = e.target.closest('button[data-v]');

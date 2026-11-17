@@ -31,12 +31,12 @@ Estados: `todo`, `doing`, `blocked`, `done`.
 
 | ID | Estado | Tarefa | Dependências | Critério de aceite |
 |---|---|---|---|---|
-| P2-01 | todo | Agent Health: repetição e falhas consecutivas | P1-01 | diagnóstico com evidência e confiança, sem autocorreção |
-| P2-02 | todo | Agent Health: testes reincidentes e causas prováveis | P2-01 | agrupamento e ação reversível recomendada |
-| P2-03 | todo | Cost Intelligence histórica | P1-01 | tendências e orçamento distinguem estimativa de cobrança |
-| P2-04 | todo | Replay/auditoria e exportação local | P1-04 | timeline filtrável, incompletas e export agregado privado |
-| P2-05 | todo | SDK mínimo de eventos | P1-01 | API validada para agentes externos sem JSONL manual |
-| P2-06 | todo | Acessibilidade e regressão visual | P1-05 | estado não depende apenas de cor/animação |
+| P2-01 | done | Agent Health: repetição e falhas consecutivas | P1-01 | diagnóstico com contagem, período, confiança e sem autocorreção |
+| P2-02 | done | Agent Health: testes reincidentes e causas prováveis | P2-01 | assinatura agrupada, causa provável e recomendação reversível |
+| P2-03 | done | Cost Intelligence histórica | P1-01 | tendência diária rotulada como estimativa, separada de cobrança |
+| P2-04 | done | Replay/auditoria e exportação local | P1-04 | filtros por período/cliente/projeto/incompletas e export sem texto privado |
+| P2-05 | done | SDK mínimo de eventos | P1-01 | `lib/sdk.js` valida e grava lifecycle de agentes externos |
+| P2-06 | done | Acessibilidade e regressão visual | P1-05 | teclado, nomes de estado, foco visível, reduced motion e testes de contrato |
 
 ## Fase 3 — produto Pro e ecossistema
 

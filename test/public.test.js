@@ -15,11 +15,17 @@ test('browser smoke contract exposes views, clients and accessibility controls',
   assert.match(html, /id="projectSel"/);
   assert.match(html, /aria-label=/);
   assert.match(html, /query\.get\('view'\)/);
+  assert.match(html, /prefers-reduced-motion/);
+  assert.match(html, /role="button" tabindex="0"/);
+  assert.match(html, /\/api\/intelligence/);
+  assert.match(html, /\/api\/export/);
 });
 
 test('office renderer keeps dedicated runtime rooms and conflict affordances', () => {
   for (const room of ['claude', 'codex', 'gemini', 'cursor']) assert.match(office, new RegExp(room));
   assert.match(office, /class="oconf"/);
+  assert.match(office, /setAttribute\('aria-label'/);
+  assert.match(office, /e\.key === 'Enter'/);
   assert.doesNotMatch(html, /stroke-dasharray="[^"]+"[^>]*class="conflict/);
 });
 

@@ -32,6 +32,22 @@ test('HTTP API, static files and SSE expose the same current state', async t => 
   assert.match(state.headers['content-type'], /application\/json/);
   assert.equal(JSON.parse(state.body).sessions.some(s => s.key === 'gemini:http-test'), true);
 
+  const now = new Date();
+  const day = now.getFullYear() + '-' + String(now.getMonth() + 1).padStart(2, '0') + '-' + String(now.getDate()).padStart(2, '0');
+  fs.writeFileSync(path.join(testData, 'events-' + day + '.jsonl'), [
+    { schema: 1, ts: Date.now() - 2, client: 'cursor', session: 'open', cwd: process.cwd(), event: 'UserPromptSubmit', prompt: 'private' },
+    { schema: 1, ts: Date.now() - 1, client: 'cursor', session: 'open', cwd: process.cwd(), event: 'PostToolUseFailure', failed: true, summary: 'private failure' },
+  ].map(JSON.stringify).join('\n') + '\n');
+  const health = await request(port, '/api/intelligence?days=1');
+  assert.equal(health.status, 200);
+  assert.equal(JSON.parse(health.body).eventCount, 2);
+  const replay = await request(port, '/api/replay?days=1&client=cursor&incomplete=1');
+  assert.equal(JSON.parse(replay.body).events.length, 2);
+  assert.equal(replay.body.includes('private'), false);
+  const exported = await request(port, '/api/export?days=1');
+  assert.match(exported.headers['content-disposition'], /attachment/);
+  assert.match(JSON.parse(exported.body).privacy, /Aggregated metadata/);
+
   const home = await request(port, '/');
   assert.equal(home.status, 200);
   assert.match(home.body, /Agent Monitor/);
