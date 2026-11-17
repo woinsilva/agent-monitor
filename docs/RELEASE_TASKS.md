@@ -55,10 +55,10 @@ Estados: `todo`, `doing`, `blocked`, `done`.
 | ID | Estado | Tarefa | Dependências | Critério de aceite |
 |---|---|---|---|---|
 | A-01 | done | Versionar fontes Free/Pro em repositório privado | nenhuma | build reproduzível dos ZIPs exatos |
-| A-02 | todo | Revalidar Free no release 1.0 | P1-08, A-01 | comandos e compatibilidade correspondem ao release |
-| A-03 | todo | Revalidar auditor Pro | P0-01, P1-01, A-01 | testes e métricas refletem schema final |
-| A-04 | todo | Preparar listing, preço, pagamentos e suporte | A-02, A-03 | revisão humana concluída, sem publicação automática |
-| A-05 | todo | Submeter Free e depois Pro | A-04 | pacotes publicados e instalação observada |
+| A-02 | done | Revalidar Free no release 1.0 | P1-08, A-01 | comandos e compatibilidade correspondem ao release |
+| A-03 | done | Revalidar auditor Pro | P0-01, P1-01, A-01 | testes e métricas refletem schema final |
+| A-04 | done | Preparar listing, preço, pagamentos e suporte | A-02, A-03 | pacote pronto para revisão humana pré-publicação, sem publicação automática |
+| A-05 | blocked | Submeter Free e depois Pro | A-04 | excluído deste escopo pelo usuário; nenhum pacote publicado |
 
 ## Ordem imediata de execução
 
