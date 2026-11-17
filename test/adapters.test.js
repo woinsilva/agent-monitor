@@ -87,11 +87,29 @@ test('Cursor preToolUse hook observes without blocking execution', () => {
 });
 
 test('Cursor prompt hook does not prevent sending the prompt', () => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'am-cursor-prompt-'));
   const result = spawnSync(process.execPath, [path.join(__dirname, '..', 'agent-bridge.js'), 'cursor', 'beforeSubmitPrompt'], {
-    input: JSON.stringify({ conversation_id: 'c-1', prompt: 'hello' }), encoding: 'utf8',
+    input: JSON.stringify({ conversation_id: 'c-1', prompt: 'hello' }),
+    env: { ...process.env, AGENT_MONITOR_DATA: dir }, encoding: 'utf8',
   });
   assert.equal(result.status, 0);
   assert.deepEqual(JSON.parse(result.stdout), { continue: true });
+  assert.equal(fs.readdirSync(dir).filter(name => /^events-.*\.jsonl$/.test(name)).length, 1);
+});
+
+test('Claude compatibility hooks ignore Cursor transcripts to avoid duplicate sessions', () => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'am-cursor-duplicate-'));
+  const result = spawnSync(process.execPath, [path.join(__dirname, '..', 'hook.js'), 'UserPromptSubmit', '--client', 'claude'], {
+    input: JSON.stringify({
+      session_id: 'cursor-session',
+      transcript_path: 'C:\\Users\\me\\.cursor\\projects\\repo\\agent-transcripts\\cursor-session.jsonl',
+      cwd: 'C:\\repo',
+      prompt: 'hello',
+    }),
+    env: { ...process.env, AGENT_MONITOR_DATA: dir }, encoding: 'utf8',
+  });
+  assert.equal(result.status, 0);
+  assert.deepEqual(fs.readdirSync(dir), []);
 });
 
 test('default Cursor configuration never installs permission-decision hooks', () => {

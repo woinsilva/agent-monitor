@@ -85,3 +85,31 @@ test('project name comes from Windows and POSIX folders alike', () => {
   assert.equal(get('claude:w').project, 'shop-api');
   assert.equal(get('claude:u').project, 'web-app');
 });
+
+test('native Cursor events replace and suppress Claude compatibility shadows', () => {
+  ev({ client: 'claude', session: 'shared', event: 'SessionStart', cwd: 'C:\\Users\\me\\.claude' });
+  assert.ok(get('claude:shared'));
+
+  ev({ client: 'cursor', session: 'shared', event: 'SessionStart', cwd: 'C:\\repo' });
+  assert.equal(get('claude:shared'), undefined);
+  assert.ok(get('cursor:shared'));
+
+  ev({ client: 'claude', session: 'shared', event: 'UserPromptSubmit', prompt: 'duplicate' });
+  assert.equal(get('claude:shared'), undefined);
+  assert.equal(get('cursor:shared').turns, 0);
+
+  ev({ client: 'cursor', session: 'shared', event: 'UserPromptSubmit', prompt: 'real' });
+  assert.equal(get('cursor:shared').turns, 1);
+  assert.equal(get('cursor:shared').prompt, 'real');
+});
+
+test('duplicate session end events are idempotent', () => {
+  ev({ client: 'gemini', session: 'g', event: 'UserPromptSubmit', prompt: 'hello' });
+  ev({ client: 'gemini', session: 'g', event: 'Stop', reply: 'done' });
+  ev({ client: 'gemini', session: 'g', event: 'SessionEnd', reason: 'exit' });
+  ev({ client: 'gemini', session: 'g', event: 'SessionEnd', reason: 'exit' });
+
+  const s = get('gemini:g');
+  assert.equal(s.status, 'ended');
+  assert.equal(s.timeline.filter(item => item.event === 'SessionEnd').length, 1);
+});

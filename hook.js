@@ -144,6 +144,14 @@ function main() {
   let data = {};
   try { data = JSON.parse(fs.readFileSync(0, 'utf8') || '{}') || {}; } catch (e) {}
 
+  // Cursor currently also invokes Claude-compatible hooks. Those payloads point
+  // at Cursor's own transcript directory and would otherwise create a second
+  // `claude` session alongside the event emitted by the native Cursor bridge.
+  // Ignore only that unambiguous compatibility case; genuine Claude sessions
+  // continue to flow through the normal hook path.
+  const transcriptPath = typeof data.transcript_path === 'string' ? data.transcript_path : '';
+  if (client === 'claude' && /(?:^|[\\/])\.cursor[\\/]projects[\\/]/i.test(transcriptPath)) return;
+
   fs.mkdirSync(DATA_DIR, { recursive: true });
   rememberShape(client, event || data.hook_event_name || '?', data);
 

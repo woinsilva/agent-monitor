@@ -42,6 +42,7 @@
   .stat { background: var(--panel); border: 1px solid var(--border); border-radius: 10px; padding: 10px 14px; box-shadow: var(--shadow); }
   .stat .n { font-size: 26px; font-weight: 650; line-height: 1.1; font-variant-numeric: tabular-nums; }
   .stat .l { color: var(--muted); font-size: 12px; }
+  .stat[title] { cursor: help; } .stat .lhint { opacity: .7; }
   .stat.working .n { color: var(--working); } .stat.waiting .n { color: var(--waiting); }
   .meter { height: 6px; background: var(--panel-2); border-radius: 3px; overflow: hidden; margin-top: 6px; }
   .meter > i { display: block; height: 100%; background: var(--codex); border-radius: 3px; }
@@ -164,8 +165,10 @@
   .office-stage { position: relative; max-width: 1040px; margin: 0 auto; isolation: isolate; }
   .office-stage canvas { display: block; width: 100%; height: auto; image-rendering: pixelated; image-rendering: crisp-edges; border-radius: 6px; }
   .office-svg, .office-layer, .office-labels { position: absolute; inset: 0; width: 100%; height: 100%; pointer-events: none; }
-  .oc-line { stroke: #e0453a; stroke-width: 1.2; stroke-dasharray: 3 2; fill: none; animation: dash 1s linear infinite; }
-  .oc-text { fill: #c0392b; font: 600 6px system-ui, sans-serif; text-anchor: middle; paint-order: stroke; stroke: #fff; stroke-width: 2px; }
+  .oconf { position: absolute; top: -2px; left: calc(50% + 7px); width: 15px; height: 15px; border-radius: 50%; background: #e0453a; color: #fff; font: 800 11px/15px system-ui, sans-serif; text-align: center; box-shadow: 0 0 0 2px #fff; animation: cbob 1s ease-in-out infinite; }
+  @keyframes cbob { 50% { transform: translateY(-2px); } }
+  .oconf[hidden] { display: none; }
+  .dconf { margin-bottom: 6px; flex-direction: column; gap: 4px; } .dconf b { white-space: normal; } .dconf .sub { margin-top: 4px; font-size: 12px; }
   @keyframes dash { to { stroke-dashoffset: -10; } }
   .oa { position: absolute; width: 4.2%; transform: translateX(-50%); pointer-events: auto; cursor: pointer; }
   .oa.intern { width: 3%; }
@@ -191,7 +194,7 @@
   .otag:empty { display: none; }
   .oa:hover .otag { background: #fff; font-weight: 600; }
   .ol-sign { position: absolute; transform: translate(-50%, -100%); font-size: 11px; font-weight: 700; letter-spacing: .06em; text-transform: uppercase; color: #8a4a26; background: rgba(255,255,255,.7); padding: 1px 8px; border-radius: 4px; }
-  .ol-sign.codex { color: #23539f; } .ol-sign.ext { color: #3f6a00; } .ol-sign.copa { color: #6b5a42; }
+  .ol-sign.codex { color: #23539f; } .ol-sign.gemini { color: #5b34b8; } .ol-sign.cursor { color: #2b2b2b; } .ol-sign.ext { color: #3f6a00; } .ol-sign.copa { color: #6b5a42; }
   .office-empty { position: absolute; left: 50%; top: 42%; transform: translate(-50%, -50%); background: rgba(255,255,255,.88); color: #3c4450; padding: 12px 18px; border-radius: 10px; text-align: center; font-weight: 600; box-shadow: var(--shadow); }
   .office-empty span { font-weight: 400; font-size: 12.5px; color: #687280; }
 
@@ -446,18 +449,22 @@
     const today = tops.filter(s => visible(s) && s.lastSeen >= midnight.getTime());
     const breakdown = [...new Set(today.map(s => s.client))].map(c => today.filter(s => s.client === c).length + ' ' + clientName(c)).join(' · ');
     const todayTools = scoped.filter(s => s.lastSeen >= midnight.getTime()).reduce((a, s) => a + s.toolCount, 0);
-    const lim = state.codexLimits;
-    const cl = state.claudeLimits || {};
+    // Plan limits belong to one client, so they only show once that client is picked
+    // in the filter. Only Codex records them for every session (rate_limits in its
+    // rollout files); Claude Code hands them only to the status line; Gemini CLI and
+    // Cursor send no plan usage in their hooks at all.
+    const lim = ui.client === 'codex' ? (state.codexLimits || {}) : {};
+    const cl = ui.client === 'claude' ? (state.claudeLimits || {}) : {};
     const resets = ts => (ts ? ' · ' + esc(t('renews', { d: new Date(ts).toLocaleString(I18N.locale, ts - now() < 86400000 ? { hour: '2-digit', minute: '2-digit' } : { weekday: 'short', day: '2-digit' }) })) : '');
-    const limitTile = (w, label) => w ? `<div class="stat"><div class="n" style="${w.usedPercent >= 80 ? 'color:var(--stale)' : ''}">${Math.round(w.usedPercent)}%</div><div class="l">${esc(label)}${resets(w.resetsAt)}</div><div class="meter"><i style="width:${Math.min(100, w.usedPercent)}%;background:var(--c-claude)"></i></div></div>` : '';
+    const limitTile = (w, label, color, hint) => w ? `<div class="stat"${hint ? ` title="${esc(hint)}"` : ''}><div class="n" style="${w.usedPercent >= 80 ? 'color:var(--stale)' : ''}">${Math.round(w.usedPercent)}%</div><div class="l">${esc(label)}${resets(w.resetsAt)}${hint ? ' <span class="lhint">ⓘ</span>' : ''}</div><div class="meter"><i style="width:${Math.min(100, w.usedPercent)}%;background:var(${color})"></i></div></div>` : '';
     $('stats').innerHTML = `
       <div class="stat working"><div class="n">${nWorking}</div><div class="l">${esc(t('s_working'))}</div></div>
       <div class="stat waiting"><div class="n">${nWaiting}</div><div class="l">${esc(t('s_waiting'))}</div></div>
       ${nStale ? `<div class="stat"><div class="n" style="color:var(--stale)">${nStale}</div><div class="l">${esc(t('s_stale'))}</div></div>` : ''}
       <div class="stat"><div class="n">${today.length}</div><div class="l">${esc(t('s_sessions_today'))}${breakdown ? ' (' + esc(breakdown) + ')' : ''}</div></div>
       <div class="stat"><div class="n">${todayTools}</div><div class="l">${esc(t('s_tool_actions'))}</div></div>
-      ${limitTile(cl.fiveHour, t('s_claude_5h'))}${limitTile(cl.sevenDay, t('s_claude_7d'))}${limitTile(cl.spend, t('s_claude_spend'))}
-      ${lim ? `<div class="stat"><div class="n">${Math.round(lim.usedPercent)}%</div><div class="l">${esc(t('s_codex_limit'))}${lim.resetsAt ? ' · ' + esc(t('renews', { d: new Date(lim.resetsAt).toLocaleDateString(I18N.locale, { weekday: 'short', day: '2-digit' }) })) : ''}</div><div class="meter"><i style="width:${Math.min(100, lim.usedPercent)}%"></i></div></div>` : ''}`;
+      ${limitTile(cl.fiveHour, t('s_claude_5h'), '--c-claude', t('h_claude_limits'))}${limitTile(cl.sevenDay, t('s_claude_7d'), '--c-claude', t('h_claude_limits'))}${limitTile(cl.spend, t('s_claude_spend'), '--c-claude', t('h_claude_limits'))}
+      ${limitTile(lim.fiveHour, t('s_codex_5h'), '--c-codex', t('h_codex_limits'))}${limitTile(lim.weekly, t('s_codex_7d'), '--c-codex', t('h_codex_limits'))}`;
 
     // alerts
     const waiting = scoped.filter(s => s.status === 'waiting');
@@ -783,7 +790,15 @@
     const keepScroll = $('drawerBody').scrollTop;
     const merged = [s, ...kids].flatMap(x => x.timeline.map(e => Object.assign({ who: x.parentKey ? (x.agentType || t('subagent')) : null }, e))).sort((a, b) => b.ts - a.ts).slice(0, 150);
     const tokens = tk ? t('tokens_line', { ctx: fmtK(tk.context), win: tk.contextWindow ? t('of') + fmtK(tk.contextWindow) : '', out: fmtK(tk.output), total: tk.total ? t('total') + fmtK(tk.total) : '' }) : '';
-    $('drawerBody').innerHTML = `
+    // files this agent (or its subagents) edited that another live agent also edited
+    const owner = s.parentKey || s.key;
+    const who = k => { const o = state.sessions.find(x => x.key === k); return o ? `${clientName(o.client)} · ${agentName(o.key)} (${o.project})` : k; };
+    const clashes = (state.conflicts || []).filter(c => c.sessions.some(x => x.key === owner));
+    const clashHtml = clashes.length ? `<div class="alert conflict dconf"><b>! ${esc(t('d_conflict'))}</b><div class="items">${clashes.map(c => {
+      const others = c.sessions.filter(x => x.key !== owner);
+      return `<div title="${esc(c.path)}">${esc(t('d_conflict_line', { file: baseName(c.path), who: others.map(x => who(x.key) + ' · ' + t('ago', { x: ago(x.ts) })).join(t('and')) }))}</div>`;
+    }).join('')}<div class="sub">${esc(t('d_conflict_tip'))}</div></div></div>` : '';
+    $('drawerBody').innerHTML = `${clashHtml}
       <h2>${esc(t('d_details'))}</h2>
       <div class="kv">
         <div class="k">${esc(t('d_folder'))}</div><div class="v mono">${esc(s.cwd)}</div>

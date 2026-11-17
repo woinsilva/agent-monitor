@@ -48,10 +48,12 @@
 
       s_working: 'agents working now', s_waiting: 'waiting for you', s_stale: 'no signal (> 20 min)',
       s_sessions_today: 'sessions today', s_tool_actions: 'tool actions today',
-      s_codex_limit: 'Codex weekly limit', renews: 'resets {d}',
+      s_codex_5h: 'Codex 5-hour limit', s_codex_7d: 'Codex weekly limit', renews: 'resets {d}',
+      h_codex_limits: 'Codex writes your plan usage (5-hour and weekly windows) into every session file, so it is always available here. Gemini CLI and Cursor do not report plan usage to their hooks.',
+      h_claude_limits: 'Claude Code only shares plan usage with its status line; it shows here while statusline.js is installed as the status line.',
       s_claude_5h: 'Claude 5-hour limit', s_claude_7d: 'Claude weekly limit', s_claude_spend: 'Claude spend limit',
 
-      a_waiting: 'Waiting for you', a_same_file: 'Same file', edited_by: '{file} edited by {who}', and: ' and ', ago: '{x} ago',
+      a_waiting: 'Waiting for you', a_same_file: 'Same file', d_conflict: 'Editing the same file as another agent', d_conflict_line: '{file}, also edited by {who}', d_conflict_tip: 'When two agents change the same file, one can overwrite the other. Let one finish before the other saves, or point them at different files.', edited_by: '{file} edited by {who}', and: ' and ', ago: '{x} ago',
       empty_none: 'No active agents right now.', empty_hint_old: ' Tick "show idle and ended" to see earlier ones.',
       empty_hint: 'As soon as an agent gets a prompt, it shows up here.',
 
@@ -72,8 +74,8 @@
       ev_sub_finished: 'subagent {name} finished', ev_session_end: 'session ended',
 
       o_empty: 'Nobody is working right now.', o_empty_sub: 'Agents walk in through the door as soon as they get a prompt.',
-      o_claude: 'Claude Code', o_codex: 'Codex', o_other: 'Other agents', o_break: 'Break room',
-      o_leaving: 'leaving…', o_needs_you: 'needs you', o_stale: 'zZz · no signal for {ago}', o_thinking: 'thinking…', o_working: 'working',
+      o_claude: 'Claude Code', o_codex: 'Codex', o_gemini: 'Gemini CLI', o_cursor: 'Cursor', o_other: 'Other agents', o_break: 'Break room',
+      o_conflict: 'Same file as another agent: {files}. Click for details.', o_leaving: 'leaving…', o_needs_you: 'needs you', o_stale: 'zZz · no signal for {ago}', o_thinking: 'thinking…', o_working: 'working',
     },
 
     pt: {
@@ -116,10 +118,12 @@
 
       s_working: 'agentes trabalhando agora', s_waiting: 'esperando você', s_stale: 'sem sinal (> 20 min)',
       s_sessions_today: 'sessões hoje', s_tool_actions: 'ações de ferramentas hoje',
-      s_codex_limit: 'limite semanal do Codex', renews: 'renova {d}',
+      s_codex_5h: 'limite de 5 horas do Codex', s_codex_7d: 'limite semanal do Codex', renews: 'renova {d}',
+      h_codex_limits: 'O Codex grava o uso do plano (janelas de 5 horas e semanal) em todo arquivo de sessão, por isso aparece sempre aqui. Gemini CLI e Cursor não informam o uso do plano nos hooks.',
+      h_claude_limits: 'O Claude Code só repassa o uso do plano para a status line; aparece aqui enquanto o statusline.js estiver instalado como status line.',
       s_claude_5h: 'limite de 5 horas do Claude', s_claude_7d: 'limite semanal do Claude', s_claude_spend: 'limite de gasto do Claude',
 
-      a_waiting: 'Esperando você', a_same_file: 'Mesmo arquivo', edited_by: '{file}: editado por {who}', and: ' e ', ago: 'há {x}',
+      a_waiting: 'Esperando você', a_same_file: 'Mesmo arquivo', d_conflict: 'Editando o mesmo arquivo que outro agente', d_conflict_line: '{file}, também editado por {who}', d_conflict_tip: 'Quando dois agentes alteram o mesmo arquivo, um pode sobrescrever o trabalho do outro. Deixe um terminar antes do outro salvar, ou direcione cada um para arquivos diferentes.', edited_by: '{file}: editado por {who}', and: ' e ', ago: 'há {x}',
       empty_none: 'Nenhum agente ativo agora.', empty_hint_old: ' Marque "mostrar ociosas e encerradas" para ver as anteriores.',
       empty_hint: 'Assim que um agente receber um pedido, ele aparece aqui.',
 
@@ -140,8 +144,8 @@
       ev_sub_finished: 'subagente {name} terminou', ev_session_end: 'sessão encerrada',
 
       o_empty: 'Ninguém trabalhando agora.', o_empty_sub: 'Os agentes entram pela porta assim que recebem um pedido.',
-      o_claude: 'Claude Code', o_codex: 'Codex', o_other: 'Outros agentes', o_break: 'Copa',
-      o_leaving: 'saindo…', o_needs_you: 'precisa de você', o_stale: 'zZz · sem sinal há {ago}', o_thinking: 'pensando…', o_working: 'trabalhando',
+      o_claude: 'Claude Code', o_codex: 'Codex', o_gemini: 'Gemini CLI', o_cursor: 'Cursor', o_other: 'Outros agentes', o_break: 'Copa',
+      o_conflict: 'Mesmo arquivo que outro agente: {files}. Clique para ver.', o_leaving: 'saindo…', o_needs_you: 'precisa de você', o_stale: 'zZz · sem sinal há {ago}', o_thinking: 'pensando…', o_working: 'trabalhando',
     },
   };
 
@@ -160,7 +164,7 @@
     location.reload();
   }
 
-  const NAMES = { claude: 'Claude', codex: 'Codex' };
+  const NAMES = { claude: 'Claude', codex: 'Codex', gemini: 'Gemini', cursor: 'Cursor' };
   const clientName = c => NAMES[c] || (String(c || '?').charAt(0).toUpperCase() + String(c || '?').slice(1));
 
 
