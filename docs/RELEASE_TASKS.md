@@ -12,7 +12,7 @@ Estados: `todo`, `doing`, `blocked`, `done`.
 | P0-03 | blocked | Testar permissões reais do Gemini | P0-01, P0-02 | execução 2026-11-17 bloqueada por 503 do Google antes da permissão; repetir permitir/negar/cancelar |
 | P0-04 | done | Testar permissões reais do Cursor | P0-02 | lifecycle/tool reais validados; permissão marcada indisponível e hooks decisórios não instalados |
 | P0-05 | done | Atualizar alegações e limitações EN/PT-BR | P0-01..04 | README e matriz distinguem supported/preview/unavailable |
-| P0-06 | todo | Atualizar PR, executar CI e revisão independente | P0-01..05 | HEAD remoto, 9 jobs verdes e revisão sem P0/P1 |
+| P0-06 | done | Atualizar PR, executar CI e revisão independente | P0-01..05 | PR atualizado; CI 44090709203 com 9 jobs verdes; gpt-review APPROVE sem bloqueios |
 
 ## Fase 1 — estabilizar Agent Monitor Free 1.0
 
@@ -25,7 +25,7 @@ Estados: `todo`, `doing`, `blocked`, `done`.
 | P1-05 | done | Adicionar smoke test de browser e office | P0-05 | smoke manual e contrato automatizado cobrem filtros, limites, conflitos e views |
 | P1-06 | done | Documentar backup/restore/upgrade/rollback Docker | P1-04 | procedimento reproduzível e persistência confirmada em rebuild real |
 | P1-07 | done | Atualizar screenshots e documentação bilíngue | P1-05 | documentação EN/PT-BR e capturas de Escritório, Painel e Relatório atualizadas |
-| P1-08 | doing | Preparar release candidate 1.0 | P1-01..07 | 1.0.0-rc.1 e changelog prontos; falta CI multiplataforma |
+| P1-08 | done | Preparar release candidate 1.0 | P1-01..07 | 1.0.0-rc.1, changelog, 67 testes e CI em Node 18/20/22 nos três sistemas |
 
 ## Fase 2 — inteligência operacional
 
