@@ -195,6 +195,7 @@ function canonicalEvent(ev) {
   const known = sessionAliases.get(incomingKey);
   if (known) {
     if (ev.event === 'SessionStart') { sessionAliases.delete(incomingKey); return ev; }
+    if (typeof known === 'object') known.expiresAt = ev.ts + STALE_MS;
     return Object.assign({}, ev, { session: typeof known === 'string' ? known : known.session });
   }
 

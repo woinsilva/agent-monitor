@@ -15,6 +15,8 @@ test('Copilot documented camelCase lifecycle and tool payloads normalize safely'
   assert.equal(tool.payload.tool_name, 'bash');
   assert.deepEqual(tool.payload.tool_input, { command: 'npm test' });
   assert.equal(fail.payload.is_error, true);
+  const resultTypeFailure = normalize('copilot', 'postToolUse', { sessionId: 'copilot-1', toolName: 'bash', resultType: 'failure' });
+  assert.equal(resultTypeFailure.payload.is_error, true);
   const stringArgs = normalize('copilot', 'postToolUse', { sessionId: 'copilot-1', toolName: 'bash', toolArgs: '{"command":"npm test"}' });
   assert.deepEqual(stringArgs.payload.tool_input, { command: 'npm test' });
 });

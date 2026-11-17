@@ -58,6 +58,17 @@ test('unrelated or interrupted tool failures are not called consecutive', () => 
   assert.equal(result.findings.some(f => f.type === 'consecutive_failure'), false);
 });
 
+test('subagent success does not interrupt the parent failure sequence', () => {
+  const events = [
+    base('PostToolUseFailure', { ts: NOW - 4, agent: 'parent', tool: 'Bash', summary: 'same failure', failed: true }),
+    base('PostToolUse', { ts: NOW - 3, agent: 'child', tool: 'Bash', summary: 'succeeded' }),
+    base('PostToolUseFailure', { ts: NOW - 2, agent: 'parent', tool: 'Bash', summary: 'same failure', failed: true }),
+    base('PostToolUseFailure', { ts: NOW - 1, agent: 'parent', tool: 'Bash', summary: 'same failure', failed: true }),
+  ];
+  const result = intelligence.analyze({ dataDir: fixture(events), now: NOW, days: 1 });
+  assert.equal(result.findings.find(f => f.type === 'consecutive_failure').confidence, 'high');
+});
+
 test('incomplete session count ignores live parents and never lets children hide stale parents', () => {
   const events = [{ client: 'codex', session: 'stale-parent' }, { client: 'codex', session: 'live-parent' }];
   const live = [

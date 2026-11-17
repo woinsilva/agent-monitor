@@ -4,6 +4,7 @@
 const fs = require('node:fs');
 const path = require('node:path');
 const os = require('node:os');
+const crypto = require('node:crypto');
 
 const EVENT_SETS = {
   cursor: ['sessionStart', 'sessionEnd', 'beforeSubmitPrompt',
@@ -24,12 +25,43 @@ function targetPath(agent, root, global) {
 function commandFor(agent, event, repo = __dirname) {
   const script = path.join(repo, 'agent-bridge.js').replace(/\\/g, '/');
   const runtime = process.execPath.replace(/\\/g, '/');
+  if (process.platform === 'win32') {
+    return 'cmd.exe /d /c call "' + runtime + '" "' + script + '" ' + agent + ' ' + event;
+  }
   return '"' + runtime + '" "' + script + '" ' + agent + ' ' + event;
+}
+
+function markerFor(dest) {
+  const root = process.env.AGENT_MONITOR_STATE_DIR || path.join(os.homedir(), '.agent-monitor', 'install-state');
+  return path.join(root, crypto.createHash('sha256').update(path.resolve(dest)).digest('hex') + '.created');
+}
+
+function atomicWrite(dest, text) {
+  const target = fs.existsSync(dest) ? fs.realpathSync(dest) : dest;
+  const mode = fs.existsSync(target) ? fs.statSync(target).mode : null;
+  const temporary = target + '.tmp-' + process.pid;
+  try {
+    fs.writeFileSync(temporary, text);
+    if (mode !== null) fs.chmodSync(temporary, mode);
+    fs.renameSync(temporary, target);
+  } catch (error) {
+    try { if (fs.existsSync(temporary)) fs.unlinkSync(temporary); } catch (_) {}
+    throw error;
+  }
+}
+
+function pruneEmptyParents(start, stop) {
+  let current = start;
+  const boundary = path.resolve(stop);
+  while (path.resolve(current).startsWith(boundary + path.sep) && fs.existsSync(current) && fs.readdirSync(current).length === 0) {
+    fs.rmdirSync(current);
+    current = path.dirname(current);
+  }
 }
 
 function ours(value) {
   return !!value && typeof value.command === 'string' &&
-    value.command.includes('/agent-bridge.js"') && / (cursor|gemini|copilot) \w+$/.test(value.command);
+    value.command.includes('/agent-bridge.js"') && / (cursor|gemini|copilot) \w+"?$/.test(value.command);
 }
 
 function updateSettings(settings, agent, remove, repo = __dirname) {
@@ -74,8 +106,10 @@ function main(argv = process.argv.slice(2)) {
   if (global && project) { console.error('Choose --global or --project, not both.'); process.exitCode = 1; return; }
   if (!global && !project) { console.error('Specify --global or --project DIR.'); process.exitCode = 1; return; }
   if (project && !fs.existsSync(project)) { console.error('Project directory not found.'); process.exitCode = 1; return; }
-  const dest = targetPath(agent, global ? os.homedir() : path.resolve(project), global);
-  const createdMarker = dest + '.created-by-agent-monitor';
+  const root = global ? os.homedir() : path.resolve(project);
+  const dest = targetPath(agent, root, global);
+  const createdMarker = markerFor(dest);
+  const legacyMarker = dest + '.created-by-agent-monitor';
   let existing = {};
   try {
     const existed = fs.existsSync(dest);
@@ -89,20 +123,22 @@ function main(argv = process.argv.slice(2)) {
       return;
     }
     if (!remove && !fs.existsSync(path.join(__dirname, 'agent-bridge.js'))) throw new Error('Missing agent-bridge.js');
-    if (existed) {
-      const backup = dest + '.bak-agent-monitor';
-      fs.copyFileSync(dest, backup);
-    }
     fs.mkdirSync(path.dirname(dest), { recursive: true });
-    if (remove && fs.existsSync(createdMarker) && generatedOnly(updated)) {
+    if (remove && (fs.existsSync(createdMarker) || fs.existsSync(legacyMarker)) && generatedOnly(updated)) {
       fs.unlinkSync(dest);
-      fs.unlinkSync(createdMarker);
+      if (fs.existsSync(createdMarker)) fs.unlinkSync(createdMarker);
+      if (fs.existsSync(legacyMarker)) fs.unlinkSync(legacyMarker);
+      if (fs.existsSync(dest + '.bak-agent-monitor')) fs.unlinkSync(dest + '.bak-agent-monitor');
+      pruneEmptyParents(path.dirname(dest), root);
     } else {
-      const temporary = dest + '.tmp-' + process.pid;
-      fs.writeFileSync(temporary, JSON.stringify(updated, null, 2) + '\n');
-      fs.renameSync(temporary, dest);
-      if (!remove && !existed) fs.writeFileSync(createdMarker, 'created by Agent Monitor\n');
+      if (existed) fs.copyFileSync(dest, dest + '.bak-agent-monitor');
+      atomicWrite(dest, JSON.stringify(updated, null, 2) + '\n');
+      if (!remove && !existed) {
+        fs.mkdirSync(path.dirname(createdMarker), { recursive: true });
+        fs.writeFileSync(createdMarker, dest + '\n');
+      }
       if (remove && fs.existsSync(createdMarker)) fs.unlinkSync(createdMarker);
+      if (remove && fs.existsSync(legacyMarker)) fs.unlinkSync(legacyMarker);
     }
     console.log((remove ? 'Removed Agent Monitor hooks from ' : 'Installed Agent Monitor hooks in ') + dest);
     console.log('Restart the agent and verify that it delivers events; hooks present does not mean tested compatibility.');
@@ -117,4 +153,4 @@ function generatedOnly(settings) {
   return Object.keys(copy).length === 0;
 }
 if (require.main === module) main();
-module.exports = { EVENT_SETS, targetPath, commandFor, ours, updateSettings, generatedOnly, main };
+module.exports = { EVENT_SETS, targetPath, commandFor, ours, updateSettings, generatedOnly, markerFor, atomicWrite, main };

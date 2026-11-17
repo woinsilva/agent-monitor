@@ -6,7 +6,7 @@ const path = require('node:path');
 const fs = require('node:fs');
 const os = require('node:os');
 const { normalize } = require('../agent-bridge');
-const { updateSettings } = require('../configure-agent');
+const { updateSettings, commandFor, atomicWrite } = require('../configure-agent');
 
 for (const fixtureName of ['cursor-3.30.14.json', 'gemini-0.68.0.json']) {
   test('golden adapter fixture: ' + fixtureName, () => {
@@ -208,7 +208,44 @@ test('installer writes atomically, refreshes backup and removes files it created
   assert.equal(fs.readdirSync(path.dirname(dest)).some(name => name.includes('.tmp-')), false);
   assert.equal(spawnSync(process.execPath, [script, ...args, '--remove'], { encoding: 'utf8' }).status, 0);
   assert.equal(fs.existsSync(dest), false);
-  assert.equal(fs.existsSync(dest + '.created-by-agent-monitor'), false);
+  assert.equal(fs.existsSync(dest + '.bak-agent-monitor'), false);
+  assert.equal(fs.existsSync(path.dirname(dest)), false);
+});
+
+test('installed command executes in native Windows command shells', { skip: process.platform !== 'win32' }, () => {
+  const parent = fs.mkdtempSync(path.join(os.tmpdir(), 'am command path '));
+  const linkedRepo = path.join(parent, 'repo with spaces');
+  fs.symlinkSync(path.join(__dirname, '..'), linkedRepo, 'junction');
+  const command = commandFor('gemini', 'Notification', linkedRepo);
+  const cmd = spawnSync(command, { shell: true, input: '{}', encoding: 'utf8' });
+  assert.equal(cmd.status, 0, cmd.stderr);
+  const powershell = spawnSync('powershell.exe', ['-NoProfile', '-Command', command], { input: '{}', encoding: 'utf8' });
+  assert.equal(powershell.status, 0, powershell.stderr);
+});
+
+test('installer refreshes backup before each update', () => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'am-backup-'));
+  const folder = path.join(dir, '.cursor');
+  const dest = path.join(folder, 'hooks.json');
+  fs.mkdirSync(folder);
+  fs.writeFileSync(dest, JSON.stringify({ theme: 'one' }));
+  const script = path.join(__dirname, '..', 'configure-agent.js');
+  const args = ['--agent', 'cursor', '--project', dir, '--apply'];
+  assert.equal(spawnSync(process.execPath, [script, ...args], { encoding: 'utf8' }).status, 0);
+  assert.equal(JSON.parse(fs.readFileSync(dest + '.bak-agent-monitor', 'utf8')).theme, 'one');
+  const edited = JSON.parse(fs.readFileSync(dest, 'utf8'));
+  edited.theme = 'two';
+  fs.writeFileSync(dest, JSON.stringify(edited));
+  assert.equal(spawnSync(process.execPath, [script, ...args], { encoding: 'utf8' }).status, 0);
+  assert.equal(JSON.parse(fs.readFileSync(dest + '.bak-agent-monitor', 'utf8')).theme, 'two');
+});
+
+test('atomic write removes its temporary file after rename failure', () => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'am-atomic-fail-'));
+  const target = path.join(dir, 'target');
+  fs.mkdirSync(target);
+  assert.throws(() => atomicWrite(target, '{}'));
+  assert.equal(fs.existsSync(target + '.tmp-' + process.pid), false);
 });
 
 test('uninstall preserves user settings added after Agent Monitor created the file', () => {
@@ -222,7 +259,7 @@ test('uninstall preserves user settings added after Agent Monitor created the fi
   fs.writeFileSync(dest, JSON.stringify(settings));
   assert.equal(spawnSync(process.execPath, [script, ...args, '--remove'], { encoding: 'utf8' }).status, 0);
   assert.equal(JSON.parse(fs.readFileSync(dest, 'utf8')).theme, 'dark');
-  assert.equal(fs.existsSync(dest + '.created-by-agent-monitor'), false);
+  assert.equal(fs.existsSync(dest + '.bak-agent-monitor'), true);
 });
 
 test('Gemini ToolPermission reaches hook.js as PermissionRequest and not informational Notification', () => {

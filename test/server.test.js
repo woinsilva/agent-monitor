@@ -145,7 +145,18 @@ test('duplicate Gemini runtime SessionEnd remains correlated until a new start',
   assert.equal(get('gemini:requested').timeline.filter(item => item.event === 'SessionEnd').length, 1);
 });
 
-test('expired Gemini runtime aliases are pruned lazily on later events', () => {
+test('Gemini runtime aliases renew while events keep arriving', () => {
+  ev({ client: 'gemini', session: 'requested', event: 'UserPromptSubmit', cwd: '/repo', prompt: 'hello' });
+  ev({ client: 'gemini', session: 'generated', event: 'Stop', cwd: '/repo', prompt: 'hello' });
+  clock += 10 * 60 * 1000;
+  ev({ client: 'gemini', session: 'generated', event: 'Notification', cwd: '/repo' });
+  clock += 11 * 60 * 1000;
+  ev({ client: 'gemini', session: 'generated', event: 'SessionEnd', cwd: '/repo' });
+  assert.equal(get('gemini:generated'), undefined);
+  assert.equal(get('gemini:requested').status, 'ended');
+});
+
+test('inactive Gemini runtime aliases are pruned lazily on later events', () => {
   ev({ client: 'gemini', session: 'requested', event: 'UserPromptSubmit', cwd: '/repo', prompt: 'hello' });
   ev({ client: 'gemini', session: 'generated', event: 'Stop', cwd: '/repo', prompt: 'hello' });
   clock += 21 * 60 * 1000;
