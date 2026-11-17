@@ -9,8 +9,8 @@ Estados: `todo`, `doing`, `blocked`, `done`.
 |---|---|---|---|---|
 | P0-01 | done | Correlacionar IDs divergentes do Gemini no mesmo turno | fixtures reais | prompt/Stop/SessionEnd formam uma sessão; nenhuma órfã working |
 | P0-02 | done | Criar fixtures sanitizadas Cursor/Gemini e matriz de versões | P0-01 | fixtures sem segredos cobrem lifecycle, tool, failure e permission |
-| P0-03 | todo | Testar permissões reais do Gemini | P0-01, P0-02 | permitir/negar/cancelar observados sem decisão pelo hook |
-| P0-04 | todo | Testar permissões reais do Cursor | P0-02 | cobertura/indisponibilidade documentada sem hook permissivo |
+| P0-03 | blocked | Testar permissões reais do Gemini | P0-01, P0-02 | execução 2026-11-17 bloqueada por 503 do Google antes da permissão; repetir permitir/negar/cancelar |
+| P0-04 | done | Testar permissões reais do Cursor | P0-02 | lifecycle/tool reais validados; permissão marcada indisponível e hooks decisórios não instalados |
 | P0-05 | todo | Atualizar alegações e limitações EN/PT-BR | P0-01..04 | docs distinguem supported/preview/unavailable |
 | P0-06 | todo | Atualizar PR, executar CI e revisão independente | P0-01..05 | HEAD remoto, 9 jobs verdes e revisão sem P0/P1 |
 
@@ -22,7 +22,7 @@ Estados: `todo`, `doing`, `blocked`, `done`.
 | P1-02 | done | Separar adaptadores por runtime | P1-01 | normalizadores isolados e golden tests por versão |
 | P1-03 | doing | Unificar setup e diagnóstico | P1-01 | doctor detecta binário/versão/escopo e delivery recente; falta fluxo único de preview/consentimento/uninstall |
 | P1-04 | doing | Testar servidor, SSE, alertas e retenção | P1-01 | HTTP/SSE/static automatizados; falta retenção e integração de alertas |
-| P1-05 | todo | Adicionar smoke test de browser e office | P0-05 | filtros, cards, badges e views exercitados automaticamente |
+| P1-05 | doing | Adicionar smoke test de browser e office | P0-05 | smoke manual 2026-11-17 passou; falta automatizar filtros, cards, badges e views |
 | P1-06 | doing | Documentar backup/restore/upgrade/rollback Docker | P1-04 | procedimento documentado; falta ensaio completo com cópia restaurada |
 | P1-07 | todo | Atualizar screenshots e documentação bilíngue | P1-05 | README EN/PT-BR e imagens correspondem ao produto |
 | P1-08 | todo | Preparar release candidate 1.0 | P1-01..07 | changelog, versão, instalação limpa e CI multiplataforma |
